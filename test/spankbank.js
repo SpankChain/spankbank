@@ -24,5 +24,16 @@ contract('SpankBank', accounts => {
     const bootyOwner = await bootyToken.owner()
     console.log(bootyOwner)
     console.log(this.spankbank.address)
+    const bootySupply = await bootyToken.totalSupply.call()
+    console.log(bootySupply)
+  })
+
+  it('stake', async () => {
+    await this.spankToken.approve(this.spankbank.address, 100)
+    await this.spankbank.stake(100, 1)
+    const totalSpankStaked = await this.spankToken.balanceOf.call(this.spankbank.address)
+    console.log(totalSpankStaked)
+    const spankPoints = await this.spankbank.getSpankPoints.call(owner, 1)
+    console.log(spankPoints)
   })
 })
