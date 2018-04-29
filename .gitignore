@@ -1,0 +1,33 @@
+*.class
+.idea/
+*.o
+*.so
+*.pyc
+*.sqlite3
+.*.sw[a-z]
+.sw[a-z]
+*~
+.DS_Store
+bin-debug/*
+bin-release/*
+bin/*
+tags
+*.beam
+*.dump
+env/
+.env/
+*egg-info*
+misc/
+dist/
+<<<<<<< Updated upstream
+=======
+Icon\?
+>>>>>>> Stashed changes
+node_modules/
+npm-debug.log
+yarn-debug.log
+ansible/*.retry
+test/build/
+.env-vars
+.node-xmlhttprequest-*
+bid-selection/bids.json
