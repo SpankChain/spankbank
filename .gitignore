@@ -19,10 +19,7 @@ env/
 *egg-info*
 misc/
 dist/
-<<<<<<< Updated upstream
-=======
 Icon\?
->>>>>>> Stashed changes
 node_modules/
 npm-debug.log
 yarn-debug.log
@@ -31,3 +28,4 @@ test/build/
 .env-vars
 .node-xmlhttprequest-*
 bid-selection/bids.json
+yarn-error.log
