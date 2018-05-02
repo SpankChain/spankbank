@@ -45,4 +45,30 @@ contract MintableToken is StandardToken, Ownable {
     MintFinished();
     return true;
   }
+
+  // -----------------------------------
+  // BURN FUNCTIONS BELOW
+  // https://github.com/OpenZeppelin/openzeppelin-solidity/blob/master/contracts/token/ERC20/BurnableToken.sol
+  // -----------------------------------
+
+  event Burn(address indexed burner, uint256 value);
+
+  /**
+   * @dev Burns a specific amount of tokens.
+   * @param _value The amount of token to be burned.
+   */
+  function burn(uint256 _value) onlyOwner public {
+    _burn(msg.sender, _value);
+  }
+
+  function _burn(address _who, uint256 _value) internal {
+    require(_value <= balances[_who]);
+    // no need to require value <= totalSupply, since that would imply the
+    // sender's balance is greater than the totalSupply, which *should* be an assertion failure
+
+    balances[_who] = balances[_who].sub(_value);
+    totalSupply_ = totalSupply_.sub(_value);
+    Burn(_who, _value);
+    Transfer(_who, address(0), _value);
+  }
 }
