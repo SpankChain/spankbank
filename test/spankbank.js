@@ -1,9 +1,13 @@
 /* global artifacts, contract, assert, web3 */
 /* eslint-env mocha */
 
+const fs = require('fs')
+
 const SpankToken = artifacts.require('./HumanStandardToken')
 const BootyToken = artifacts.require('./MintableToken')
 const SpankBank = artifacts.require('./SpankBank')
+
+const data = JSON.parse(fs.readFileSync(`${__dirname}/../data.json`))
 
 let spankbank, spankToken, bootyToken
 
@@ -35,11 +39,23 @@ contract('SpankBank', accounts => {
     const spankAddress = await spankbank.spankAddress()
     assert.equal(spankAddress, spankToken.address)
 
+    const periodLength = await spankbank.periodLength()
+    assert.equal(periodLength, data.spankbank.periodLength)
+
+    const maxPeriods = await spankbank.maxPeriods()
+    assert.equal(maxPeriods, data.spankbank.maxPeriods)
+
+    const initialBootySupply = await bootyToken.totalSupply.call()
+    assert.equal(initialBootySupply, data.spankbank.initialBootySupply)
+
+    const initialCurrentPeriod = await spankbank.currentPeriod()
+    assert.equal(initialCurrentPeriod, 0)
+
+
     // 1. spankAddress and token
     // 2. period length
     // 3. max periods
     // 4. intial booty supply
-    // 5. points table
     // 6. initial period is 0
     // 7. initial period params (from struct)
 
