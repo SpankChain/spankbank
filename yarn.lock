@@ -413,9 +413,9 @@ set-blocking@^2.0.0:
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/set-blocking/-/set-blocking-2.0.0.tgz#045f9782d011ae9a6803ddd382b24392b3d890f7"
 
-solc@0.4.23:
-  version "0.4.23"
-  resolved "https://registry.yarnpkg.com/solc/-/solc-0.4.23.tgz#54a0ff4015827b32fddb62c0a418b5247310a58e"
+solc@0.4.15, solc@=0.4.15:
+  version "0.4.15"
+  resolved "https://registry.yarnpkg.com/solc/-/solc-0.4.15.tgz#8ae8f1606a124a3f81c28b9dcecb0964ebdf9f25"
   dependencies:
     fs-extra "^0.30.0"
     memorystream "^0.3.1"
