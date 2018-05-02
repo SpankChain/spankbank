@@ -51,30 +51,15 @@ contract('SpankBank', accounts => {
     const initialCurrentPeriod = await spankbank.currentPeriod()
     assert.equal(initialCurrentPeriod, 0)
 
-
-    // 1. spankAddress and token
-    // 2. period length
-    // 3. max periods
-    // 4. intial booty supply
-    // 6. initial period is 0
-    // 7. initial period params (from struct)
-
-    /*
-
-
-    const supply = await this.spankToken.totalSupply()
-    console.log(supply)
-    const spankAddress = await this.spankbank.spankAddress()
-    console.log(spankAddress)
-    const bootyAddress = await this.spankbank.bootyToken()
-    console.log(bootyAddress)
-    const bootyToken = await BootyToken.at(bootyAddress)
-    const bootyOwner = await bootyToken.owner()
-    console.log(bootyOwner)
-    console.log(this.spankbank.address)
-    const bootySupply = await bootyToken.totalSupply.call()
-    console.log(bootySupply)
-    */
+    const initialPeriodData = await spankbank.periods(0)
+    const [bootyFees, totalSpankPoints, bootyMinted, mintingComplete, startTime, endTime] = initialPeriodData
+    assert.equal(bootyFees, 0)
+    assert.equal(totalSpankPoints, 0)
+    assert.equal(bootyMinted, 0)
+    assert.equal(mintingComplete, false)
+    const timeSinceDeployment = new Date().getTime() / 1000 - startTime
+    assert.isAtMost(timeSinceDeployment, 5) // at most 5 seconds since deployment
+    assert.equal(endTime.toNumber(), startTime.add(periodLength).toNumber())
   })
 
   it.skip('stake', async () => {
@@ -94,7 +79,7 @@ contract('SpankBank', accounts => {
 
   // I have 2.5 hours, I think I can get tests for minting properly done
   // 1. The spankbank is deployed, which immediately starts period 0
-  // 2. During period 0, spank can be staked, and booty can be paid in fees
+  // 2. During period 0, spank can be staked
   // 3. The spank staked won't take effect until period 1
   // 4. The initial booty supply will be distributed proportionally to spank
   //    stakers with a special function (mint initial booty)

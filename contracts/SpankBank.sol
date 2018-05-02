@@ -52,7 +52,7 @@ contract SpankBank {
     uint256 endTime;
   }
 
-  mapping(uint256 => Period) periods;
+  mapping(uint256 => Period) public periods;
 
   function SpankBank (
     address _spankAddress,
@@ -66,6 +66,11 @@ contract SpankBank {
     bootyToken = new MintableToken();
     bootyToken.mint(this, initialBootySupply);
     maxPeriods = _maxPeriods;
+
+    uint256 startTime = now;
+
+    periods[currentPeriod].startTime = startTime;
+    periods[currentPeriod].endTime = SafeMath.add(startTime, periodLength);
 
     // initialize points table
     pointsTable[1] = 45;
@@ -153,11 +158,13 @@ contract SpankBank {
   // This will check the current time and update the current period accordingly
   // - called from all write functions to ensure the period is always up to date before any writes
   // - can also be called externally, but there isn't a good reason for why you would want to
+  // - the while loop protects against the edge case where we miss a period
   function updatePeriod() {
-    if (now > periods[currentPeriod].endTime) {
+    while (now >= periods[currentPeriod].endTime) {
+      Period memory prevPeriod = periods[currentPeriod];
       currentPeriod += 1;
-      periods[currentPeriod].startTime = now;
-      periods[currentPeriod].endTime = SafeMath.add(now, periodLength);
+      periods[currentPeriod].startTime = prevPeriod.endTime;
+      periods[currentPeriod].endTime = SafeMath.add(prevPeriod.endTime, periodLength);
     }
   }
 
