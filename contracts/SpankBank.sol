@@ -35,10 +35,14 @@ contract SpankBank {
   struct Staker {
     address stakerAddress; // the address of the staker
     uint256 spankStaked; // the amount of spank staked
+
+    // not sure we need bootyBalance
     uint256 bootyBalance; // the amount of accumulated BOOTY
+
     uint256 startingPeriod; // the period this staker started staking
     uint256 endingPeriod; // the period after which this stake expires
     mapping(uint256 => uint256) spankPoints; // the spankPoints per period
+    mapping(uint256 => bool) didClaimBooty;
   }
 
   mapping(address => Staker) stakers;
@@ -148,10 +152,12 @@ contract SpankBank {
     period.mintingComplete = true;
 
     uint256 targetBootySupply = SafeMath.mul(period.bootyFees, 20);
-
     uint256 totalBootySupply = bootyToken.totalSupply();
+
     if (targetBootySupply > totalBootySupply) {
-      bootyToken.mint(this, targetBootySupply - totalBootySupply);
+      uint256 bootyMinted = targetBootySupply - totalBootySupply;
+      bootyToken.mint(this, bootyMinted);
+      period.bootyMinted = bootyMinted;
     }
   }
 
@@ -166,6 +172,37 @@ contract SpankBank {
       periods[currentPeriod].startTime = prevPeriod.endTime;
       periods[currentPeriod].endTime = SafeMath.add(prevPeriod.endTime, periodLength);
     }
+  }
+
+  function mintInitialBooty() {
+    updatePeriod();
+    if (currentPeriod == 1) {
+      Period storage period = periods[currentPeriod];
+      period.bootyMinted = bootyToken.totalSupply();
+      period.mintingComplete = true;
+    }
+  }
+
+  function claimBooty(uint256 _period) {
+    updatePeriod();
+
+    require(_period < currentPeriod); // can only claim booty for previous periods
+
+    Staker storage staker = stakers[msg.sender];
+
+    require(!staker.didClaimBooty[_period]); // can only claim booty once
+
+    staker.didClaimBooty[_period] = true;
+
+    Period memory period = periods[_period];
+    uint256 bootyMinted = period.bootyMinted;
+    uint256 totalSpankPoints = period.totalSpankPoints;
+
+    uint256 stakerSpankPoints = staker.spankPoints[_period];
+
+    uint256 bootyOwed = SafeMath.div( SafeMath.mul( stakerSpankPoints, bootyMinted) totalSpankPoints);
+
+    require(bootyToken.transfer(msg.sender, bootyOwed));
   }
 
   /*
