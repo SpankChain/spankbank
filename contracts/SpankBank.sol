@@ -33,11 +33,9 @@ contract SpankBank {
   uint256 public currentPeriod = 0;
 
   struct Staker {
+    // TODO do we need stakerAddress? Right now it is being used to check existence
     address stakerAddress; // the address of the staker
     uint256 spankStaked; // the amount of spank staked
-
-    // not sure we need bootyBalance
-    uint256 bootyBalance; // the amount of accumulated BOOTY
 
     uint256 startingPeriod; // the period this staker started staking
     uint256 endingPeriod; // the period after which this stake expires
@@ -45,7 +43,7 @@ contract SpankBank {
     mapping(uint256 => bool) didClaimBooty;
   }
 
-  mapping(address => Staker) stakers;
+  mapping(address => Staker) public stakers;
 
   struct Period {
     uint256 bootyFees;
@@ -107,16 +105,21 @@ contract SpankBank {
     // The spankAmount of spankPoints the user will have during the next staking period
     uint256 nextSpankPoints = SafeMath.div( SafeMath.mul(spankAmount, pointsTable[stakePeriods]), 100 );
 
-    stakers[msg.sender] = Staker(msg.sender, spankAmount, 0, currentPeriod + 1, currentPeriod + stakePeriods);
+    stakers[msg.sender] = Staker(msg.sender, spankAmount, currentPeriod + 1, currentPeriod + stakePeriods);
 
     stakers[msg.sender].spankPoints[currentPeriod + 1] = nextSpankPoints;
 
     uint256 nextTotalSpankPoints = periods[currentPeriod + 1].totalSpankPoints;
     nextTotalSpankPoints = SafeMath.add(nextTotalSpankPoints, nextSpankPoints);
+    periods[currentPeriod + 1].totalSpankPoints = nextTotalSpankPoints;
   }
 
   function getSpankPoints(address stakerAddress, uint256 period) returns (uint256) {
     return stakers[stakerAddress].spankPoints[period];
+  }
+
+  function getDidClaimBooty(address stakerAddress, uint256 period) returns (bool) {
+    return stakers[stakerAddress].didClaimBooty[period];
   }
 
   // user will be able to add more SPANK to their stake and / or extend it
@@ -165,6 +168,12 @@ contract SpankBank {
   // - called from all write functions to ensure the period is always up to date before any writes
   // - can also be called externally, but there isn't a good reason for why you would want to
   // - the while loop protects against the edge case where we miss a period
+
+  uint256 public startTime1;
+  uint256 public startTime2;
+  uint256 public endTime1;
+  uint256 public endTime2;
+
   function updatePeriod() {
     while (now >= periods[currentPeriod].endTime) {
       Period memory prevPeriod = periods[currentPeriod];
@@ -200,7 +209,7 @@ contract SpankBank {
 
     uint256 stakerSpankPoints = staker.spankPoints[_period];
 
-    uint256 bootyOwed = SafeMath.div( SafeMath.mul( stakerSpankPoints, bootyMinted) totalSpankPoints);
+    uint256 bootyOwed = SafeMath.div( SafeMath.mul( stakerSpankPoints, bootyMinted), totalSpankPoints);
 
     require(bootyToken.transfer(msg.sender, bootyOwed));
   }

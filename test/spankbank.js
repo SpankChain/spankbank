@@ -1,6 +1,7 @@
 /* global artifacts, contract, assert, web3 */
 /* eslint-env mocha */
 
+const {increaseTimeTo, duration} = require('../utils')
 const fs = require('fs')
 
 const SpankToken = artifacts.require('./HumanStandardToken')
@@ -62,33 +63,53 @@ contract('SpankBank', accounts => {
     assert.equal(endTime.toNumber(), startTime.add(periodLength).toNumber())
   })
 
-  it.skip('stake', async () => {
-    await this.spankToken.approve(this.spankbank.address, 100)
-    await this.spankbank.stake(100, 1)
-    const totalSpankStaked = await this.spankToken.balanceOf.call(this.spankbank.address)
-    console.log(totalSpankStaked)
-    const spankPoints = await this.spankbank.getSpankPoints.call(owner, 1)
-    console.log(spankPoints)
+  describe('period 0', async () => {
+    it('stake', async () => {
+      await spankToken.approve(spankbank.address, 100)
+      await spankbank.stake(100, 12)
+
+      const totalSpankStaked = await spankToken.balanceOf.call(spankbank.address)
+      assert.equal(totalSpankStaked, 100)
+
+      const staker = await spankbank.stakers(owner)
+      const [stakerAddress, spankStaked, startingPeriod, endingPeriod] = staker
+      assert.equal(owner, stakerAddress)
+      assert.equal(spankStaked, 100)
+      assert.equal(startingPeriod, 1)
+      assert.equal(endingPeriod, 12)
+
+      const spankPoints = await spankbank.getSpankPoints.call(owner, 1)
+      assert.equal(spankPoints, 100)
+
+      const didClaimBooty = await spankbank.getDidClaimBooty.call(owner, 1)
+      assert.equal(didClaimBooty, false)
+
+      const [_, totalSpankPoints] = await spankbank.periods(1)
+      assert.equal(totalSpankPoints, 100)
+    })
   })
+
+  describe('period 1', async () => {
+    it('fast forward to period 1', async () => {
+      const initialPeriodData = await spankbank.periods(0)
+      const [a, b, c, d, startTime, endTime] = initialPeriodData
+      await increaseTimeTo(+endTime.toNumber() + duration.days(1))
+      await spankbank.updatePeriod()
+      const currentPeriod = await spankbank.currentPeriod()
+      assert.equal(currentPeriod, 1)
+    })
+  })
+
 
   it.skip('sendFees', async () => {
     spankbank.sendBooty(owner, 1000)
-
-
   })
 
-  // I have 2.5 hours, I think I can get tests for minting properly done
-  // 1. The spankbank is deployed, which immediately starts period 0
-  // 2. During period 0, spank can be staked
-  // 3. The spank staked won't take effect until period 1
-  // 4. The initial booty supply will be distributed proportionally to spank
-  //    stakers with a special function (mint initial booty)
-  // 5. This can only be called during period 1
-  // 6. There can be no booty burned during period 0 because no one has any
-  // 7. I need some number of stakers during period 0
-  // 8. I need some amount of booty burned during period 1
-  // 9. I need to verify the correct amount of booty generated / distributed
-  // 10. this involves testing and moving time forward between functions
-  // 11. It is probably worth it to set up my tests properly now
-  // 12. What does that mean?
+  // 1. Stake SPANK during period 0
+  // 2. Confirm proper initial booty distribution
+  // 3. Confirm staker booty withdrawal in period 1
+  // 4. Stake further spank in period 1
+  // 5. send fees in period 1
+  // 6. mint booty during period 2
+  // 7. confirm proper withdrawals for both stakers in period 2
 })
