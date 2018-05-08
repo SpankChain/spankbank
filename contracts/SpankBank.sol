@@ -1,4 +1,4 @@
-pragma solidity 0.4.15;
+pragma solidity 0.4.23;
 import {SafeMath} from './SafeMath.sol';
 import {HumanStandardToken} from './HumanStandardToken.sol';
 import {MintableToken} from './MintableToken.sol';
