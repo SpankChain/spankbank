@@ -36,35 +36,49 @@ contract('SpankBank', accounts => {
     bootyToken = await BootyToken.at(bootyAddress)
   })
 
-  it('initial parameters are correct', async () => {
 
-    const spankAddress = await spankbank.spankAddress()
-    assert.equal(spankAddress, spankToken.address)
+  describe('initialization', async () => {
+    it('contract deployment', async () => {
 
-    const periodLength = await spankbank.periodLength()
-    assert.equal(periodLength, data.spankbank.periodLength)
+      const spankAddress = await spankbank.spankAddress()
+      assert.equal(spankAddress, spankToken.address)
 
-    const maxPeriods = await spankbank.maxPeriods()
-    assert.equal(maxPeriods, data.spankbank.maxPeriods)
+      const periodLength = await spankbank.periodLength()
+      assert.equal(periodLength, data.spankbank.periodLength)
 
-    const initialBootySupply = await bootyToken.totalSupply.call()
-    assert.equal(initialBootySupply, data.spankbank.initialBootySupply)
+      const maxPeriods = await spankbank.maxPeriods()
+      assert.equal(maxPeriods, data.spankbank.maxPeriods)
 
-    const ownerBootyBalance = await bootyToken.balanceOf.call(owner)
-    assert.equal(ownerBootyBalance, data.spankbank.initialBootySupply)
+      const initialBootySupply = await bootyToken.totalSupply.call()
+      assert.equal(initialBootySupply, data.spankbank.initialBootySupply)
 
-    const initialCurrentPeriod = await spankbank.currentPeriod()
-    assert.equal(initialCurrentPeriod, 0)
+      const ownerBootyBalance = await bootyToken.balanceOf.call(owner)
+      assert.equal(ownerBootyBalance, data.spankbank.initialBootySupply)
 
-    const initialPeriodData = await spankbank.periods(0)
-    const [bootyFees, totalSpankPoints, bootyMinted, mintingComplete, startTime, endTime] = initialPeriodData
-    assert.equal(bootyFees, 0)
-    assert.equal(totalSpankPoints, 0)
-    assert.equal(bootyMinted, 0)
-    assert.equal(mintingComplete, false)
-    const timeSinceDeployment = new Date().getTime() / 1000 - startTime
-    assert.isAtMost(timeSinceDeployment, 5) // at most 5 seconds since deployment
-    assert.equal(endTime.toNumber(), startTime.add(periodLength).toNumber())
+      const initialCurrentPeriod = await spankbank.currentPeriod()
+      assert.equal(initialCurrentPeriod, 0)
+
+      const initialPeriodData = await spankbank.periods(0)
+      const [bootyFees, totalSpankPoints, bootyMinted, mintingComplete, startTime, endTime] = initialPeriodData
+      assert.equal(bootyFees, 0)
+      assert.equal(totalSpankPoints, 0)
+      assert.equal(bootyMinted, 0)
+      assert.equal(mintingComplete, false)
+      const timeSinceDeployment = new Date().getTime() / 1000 - startTime
+      assert.isAtMost(timeSinceDeployment, 5) // at most 5 seconds since deployment
+      assert.equal(endTime.toNumber(), startTime.add(periodLength).toNumber())
+    })
+
+    it('pay booty fees', async () => {
+      await bootyToken.approve(spankbank.address, data.spankbank.initialBootySupply)
+      await spankbank.sendFees(data.spankbank.initialBootySupply)
+
+      const totalBootySupply = await bootyToken.totalSupply.call()
+      assert.equal(totalBootySupply, 0)
+
+      const [bootyFees] = await spankbank.periods(0)
+      assert.equal(bootyFees, data.spankbank.initialBootySupply)
+    })
   })
 
   describe.skip('period 0', async () => {

@@ -142,11 +142,11 @@ contract SpankBank {
     require(bootyAmount > 0); // fees must be greater than 0
     require(bootyToken.transferFrom(msg.sender, this, bootyAmount));
 
-    // bootyToken.burn(bootyAmount);
+    bootyToken.burn(bootyAmount);
 
-    // uint256 currentBootyFees = periods[currentPeriod].bootyFees;
-    // currentBootyFees = SafeMath.add(bootyAmount, currentBootyFees);
-    // periods[currentPeriod].bootyFees = currentBootyFees;
+    uint256 currentBootyFees = periods[currentPeriod].bootyFees;
+    currentBootyFees = SafeMath.add(bootyAmount, currentBootyFees);
+    periods[currentPeriod].bootyFees = currentBootyFees;
   }
 
   function mintBooty() {
