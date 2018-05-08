@@ -74,6 +74,8 @@ contract SpankBank {
     periods[currentPeriod].startTime = startTime;
     periods[currentPeriod].endTime = SafeMath.add(startTime, periodLength);
 
+    bootyToken.transfer(msg.sender, initialBootySupply);
+
     // initialize points table
     pointsTable[1] = 45;
     pointsTable[2] = 50;
@@ -140,11 +142,11 @@ contract SpankBank {
     require(bootyAmount > 0); // fees must be greater than 0
     require(bootyToken.transferFrom(msg.sender, this, bootyAmount));
 
-    bootyToken.burn(bootyAmount);
+    // bootyToken.burn(bootyAmount);
 
-    uint256 currentBootyFees = periods[currentPeriod].bootyFees;
-    currentBootyFees = SafeMath.add(bootyAmount, currentBootyFees);
-    periods[currentPeriod].bootyFees = currentBootyFees;
+    // uint256 currentBootyFees = periods[currentPeriod].bootyFees;
+    // currentBootyFees = SafeMath.add(bootyAmount, currentBootyFees);
+    // periods[currentPeriod].bootyFees = currentBootyFees;
   }
 
   function mintBooty() {
@@ -179,15 +181,6 @@ contract SpankBank {
     }
   }
 
-  function mintInitialBooty() {
-    updatePeriod();
-    if (currentPeriod == 1) { // TODO why not use require here?
-      Period storage period = periods[currentPeriod - 1];
-      period.bootyMinted = bootyToken.totalSupply();
-      period.mintingComplete = true;
-    }
-  }
-
   function claimBooty(uint256 _period) {
     updatePeriod();
 
@@ -205,33 +198,6 @@ contract SpankBank {
 
     uint256 stakerSpankPoints = staker.spankPoints[_period];
 
-    /*
-    uint256 bootyOwed = SafeMath.div( SafeMath.mul( stakerSpankPoints, bootyMinted), totalSpankPoints);
-
-    require(bootyToken.transfer(msg.sender, bootyOwed));
-    */
-  }
-
-  // special function for claiming initial booty
-  // uses the spank points for period 1 to determine booty distribution
-  // this works because stakers during period 1 set their spankpoints for period 2
-  function claimInitialBooty() {
-    updatePeriod();
-
-    require(currentPeriod == 1);
-
-    Staker storage staker = stakers[msg.sender];
-
-    require(!staker.didClaimBooty[0]); // can only claim booty once
-
-    staker.didClaimBooty[0] = true;
-
-    // use booty minted from period 0 but spank points from period 1
-    uint256 bootyMinted = periods[0].bootyMinted;
-    uint256 totalSpankPoints = periods[1].totalSpankPoints;
-
-    uint256 stakerSpankPoints = staker.spankPoints[1];
-
     uint256 bootyOwed = SafeMath.div( SafeMath.mul( stakerSpankPoints, bootyMinted), totalSpankPoints);
 
     require(bootyToken.transfer(msg.sender, bootyOwed));
@@ -242,9 +208,4 @@ contract SpankBank {
     // check timelock - if expired, allow withdrawl
   }
   */
-
-  // TODO delete this function
-  function sendBooty(address receiver, uint256 amount) {
-    bootyToken.transfer(receiver, amount);
-  }
 }

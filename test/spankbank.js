@@ -27,6 +27,7 @@ const verify_deployment = () => {
 
 contract('SpankBank', accounts => {
   const owner = accounts[0]
+  const p1 = accounts[1]
 
   before('should deploy', async () => {
     spankbank = await SpankBank.deployed()
@@ -49,8 +50,8 @@ contract('SpankBank', accounts => {
     const initialBootySupply = await bootyToken.totalSupply.call()
     assert.equal(initialBootySupply, data.spankbank.initialBootySupply)
 
-    const spankBankBootyBalance = await bootyToken.balanceOf.call(spankbank.address)
-    assert.equal(spankBankBootyBalance, data.spankbank.initialBootySupply)
+    const ownerBootyBalance = await bootyToken.balanceOf.call(owner)
+    assert.equal(ownerBootyBalance, data.spankbank.initialBootySupply)
 
     const initialCurrentPeriod = await spankbank.currentPeriod()
     assert.equal(initialCurrentPeriod, 0)
@@ -66,7 +67,7 @@ contract('SpankBank', accounts => {
     assert.equal(endTime.toNumber(), startTime.add(periodLength).toNumber())
   })
 
-  describe('period 0', async () => {
+  describe.skip('period 0', async () => {
     it('stake', async () => {
       await spankToken.approve(spankbank.address, 100)
       await spankbank.stake(100, 12)
@@ -95,7 +96,7 @@ contract('SpankBank', accounts => {
     })
   })
 
-  describe('period 1', async () => {
+  describe.skip('period 1', async () => {
     it('fast forward to period 1', async () => {
       // TODO wrap getter functions to convert bignums to integers
       const initialPeriod = await spankbank.periods(0)
@@ -141,8 +142,37 @@ contract('SpankBank', accounts => {
       assert.equal(bootyFees, 1000)
     })
 
-    it.skip('stake', async () => {
+    it('stake', async () => {
+      await spankToken.transfer(p1, 100)
+      const p1SpankBalance = await spankToken.balanceOf.call(p1)
+      assert.equal(p1SpankBalance, 100)
 
+      await spankToken.approve(spankbank.address, 100, { from: p1 })
+      await spankbank.stake(100, 6, { from: p1 })
+
+      const totalSpankStaked = await spankToken.balanceOf.call(spankbank.address)
+      assert.equal(totalSpankStaked, 200)
+
+      const staker = await spankbank.stakers(p1)
+      const [stakerAddress, spankStaked, startingPeriod, endingPeriod] = staker
+      assert.equal(p1, stakerAddress)
+      assert.equal(spankStaked, 100)
+      assert.equal(startingPeriod, 2)
+      assert.equal(endingPeriod, 7)
+
+      const spankPoints = await spankbank.getSpankPoints.call(p1, 2)
+      assert.equal(spankPoints, 70)
+
+      const didClaimBooty_0 = await spankbank.getDidClaimBooty.call(p1, 1)
+      assert.equal(didClaimBooty_0, false)
+
+      const didClaimBooty_1 = await spankbank.getDidClaimBooty.call(p1, 2)
+      assert.equal(didClaimBooty_1, false)
+
+      const [_, totalSpankPoints] = await spankbank.periods(2)
+      // TODO need the claimBooty to update total spank points
+      // - and provide a way to extend the staking position
+      assert.equal(totalSpankPoints, 170)
     })
   })
 
