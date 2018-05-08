@@ -49,6 +49,9 @@ contract('SpankBank', accounts => {
     const initialBootySupply = await bootyToken.totalSupply.call()
     assert.equal(initialBootySupply, data.spankbank.initialBootySupply)
 
+    const spankBankBootyBalance = await bootyToken.balanceOf.call(spankbank.address)
+    assert.equal(spankBankBootyBalance, data.spankbank.initialBootySupply)
+
     const initialCurrentPeriod = await spankbank.currentPeriod()
     assert.equal(initialCurrentPeriod, 0)
 
@@ -81,8 +84,11 @@ contract('SpankBank', accounts => {
       const spankPoints = await spankbank.getSpankPoints.call(owner, 1)
       assert.equal(spankPoints, 100)
 
-      const didClaimBooty = await spankbank.getDidClaimBooty.call(owner, 1)
-      assert.equal(didClaimBooty, false)
+      const didClaimBooty_0 = await spankbank.getDidClaimBooty.call(owner, 0)
+      assert.equal(didClaimBooty_0, false)
+
+      const didClaimBooty_1 = await spankbank.getDidClaimBooty.call(owner, 1)
+      assert.equal(didClaimBooty_1, false)
 
       const [_, totalSpankPoints] = await spankbank.periods(1)
       assert.equal(totalSpankPoints, 100)
@@ -91,19 +97,53 @@ contract('SpankBank', accounts => {
 
   describe('period 1', async () => {
     it('fast forward to period 1', async () => {
-      const initialPeriodData = await spankbank.periods(0)
-      const [a, b, c, d, startTime, endTime] = initialPeriodData
+      // TODO wrap getter functions to convert bignums to integers
+      const initialPeriod = await spankbank.periods(0)
+      const [a, b, c, d, startTime, endTime] = initialPeriod
       await increaseTimeTo(+endTime.toNumber() + duration.days(1))
       await spankbank.updatePeriod()
       const currentPeriod = await spankbank.currentPeriod()
       assert.equal(currentPeriod, 1)
+      const period_1 = await spankbank.periods(1)
+      const [a1, b1, c1, d1, startTime_1, endTime_1] = period_1
+      assert.equal(+endTime.toNumber(), +startTime_1.toNumber())
+      assert.equal(+endTime_1.toNumber(), +startTime_1.toNumber() + duration.days(30))
+    })
+
+    it('mint initial booty', async () => {
+      await spankbank.mintInitialBooty()
+      const period = await spankbank.periods(0)
+      const [a, b, bootyMinted, mintingComplete] = period
+      assert.equal(bootyMinted, data.spankbank.initialBootySupply)
+      assert.equal(mintingComplete, true)
+    })
+
+    it('claim initial booty', async () => {
+      await spankbank.claimInitialBooty()
+      const stakerBootyBalance = await bootyToken.balanceOf.call(owner)
+      assert.equal(stakerBootyBalance, data.spankbank.initialBootySupply)
+
+      const didClaimBooty = await spankbank.getDidClaimBooty.call(owner, 0)
+      assert.equal(didClaimBooty, true)
+    })
+
+    it('sendFees', async () => {
+      await bootyToken.approve(spankbank.address, 1000)
+      await spankbank.sendFees(1000)
+
+      const totalBootySupply = await bootyToken.totalSupply.call()
+      assert.equal(totalBootySupply, data.spankbank.initialBootySupply - 1000)
+
+      const stakerBootyBalance = await bootyToken.balanceOf.call(owner)
+      assert.equal(stakerBootyBalance, data.spankbank.initialBootySupply - 1000)
+
+      const [bootyFees] = await spankbank.periods(1)
+      assert.equal(bootyFees, 1000)
+
     })
   })
 
 
-  it.skip('sendFees', async () => {
-    spankbank.sendBooty(owner, 1000)
-  })
 
   // 1. Stake SPANK during period 0
   // 2. Confirm proper initial booty distribution

@@ -144,6 +144,7 @@ contract SpankBank {
 
     uint256 currentBootyFees = periods[currentPeriod].bootyFees;
     currentBootyFees = SafeMath.add(bootyAmount, currentBootyFees);
+    periods[currentPeriod].bootyFees = currentBootyFees;
   }
 
   function mintBooty() {
@@ -169,11 +170,6 @@ contract SpankBank {
   // - can also be called externally, but there isn't a good reason for why you would want to
   // - the while loop protects against the edge case where we miss a period
 
-  uint256 public startTime1;
-  uint256 public startTime2;
-  uint256 public endTime1;
-  uint256 public endTime2;
-
   function updatePeriod() {
     while (now >= periods[currentPeriod].endTime) {
       Period memory prevPeriod = periods[currentPeriod];
@@ -185,8 +181,8 @@ contract SpankBank {
 
   function mintInitialBooty() {
     updatePeriod();
-    if (currentPeriod == 1) {
-      Period storage period = periods[currentPeriod];
+    if (currentPeriod == 1) { // TODO why not use require here?
+      Period storage period = periods[currentPeriod - 1];
       period.bootyMinted = bootyToken.totalSupply();
       period.mintingComplete = true;
     }
@@ -208,6 +204,33 @@ contract SpankBank {
     uint256 totalSpankPoints = period.totalSpankPoints;
 
     uint256 stakerSpankPoints = staker.spankPoints[_period];
+
+    /*
+    uint256 bootyOwed = SafeMath.div( SafeMath.mul( stakerSpankPoints, bootyMinted), totalSpankPoints);
+
+    require(bootyToken.transfer(msg.sender, bootyOwed));
+    */
+  }
+
+  // special function for claiming initial booty
+  // uses the spank points for period 1 to determine booty distribution
+  // this works because stakers during period 1 set their spankpoints for period 2
+  function claimInitialBooty() {
+    updatePeriod();
+
+    require(currentPeriod == 1);
+
+    Staker storage staker = stakers[msg.sender];
+
+    require(!staker.didClaimBooty[0]); // can only claim booty once
+
+    staker.didClaimBooty[0] = true;
+
+    // use booty minted from period 0 but spank points from period 1
+    uint256 bootyMinted = periods[0].bootyMinted;
+    uint256 totalSpankPoints = periods[1].totalSpankPoints;
+
+    uint256 stakerSpankPoints = staker.spankPoints[1];
 
     uint256 bootyOwed = SafeMath.div( SafeMath.mul( stakerSpankPoints, bootyMinted), totalSpankPoints);
 
