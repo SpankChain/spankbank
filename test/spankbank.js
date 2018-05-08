@@ -139,10 +139,12 @@ contract('SpankBank', accounts => {
 
       const [bootyFees] = await spankbank.periods(1)
       assert.equal(bootyFees, 1000)
+    })
+
+    it.skip('stake', async () => {
 
     })
   })
-
 
 
   // 1. Stake SPANK during period 0
@@ -150,6 +152,8 @@ contract('SpankBank', accounts => {
   // 3. Confirm staker booty withdrawal in period 1
   // 4. Stake further spank in period 1
   // 5. send fees in period 1
-  // 6. mint booty during period 2
+  // 6. mint booty during period 2 (should still only go to period 0 stakers)
   // 7. confirm proper withdrawals for both stakers in period 2
+  // 8. mint booty in period 3 (for stakers during period 2)
+  // 9. now booty should go to stakers from period 0 & 1
 })
