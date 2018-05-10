@@ -235,9 +235,24 @@ contract SpankBank {
     }
   }
 
-  /*
-  function withdrawStake(uint256 amount) {
-    // check timelock - if expired, allow withdrawl
+  function withdrawStake() {
+    updatePeriod();
+
+    Staker storage staker = stakers[msg.sender];
+
+    require(currentPeriod > staker.endingPeriod);
+
+    spankToken.transfer(msg.sender, staker.spankStaked);
+
+    delete staker.spankPoints;
+    delete staker.didClaimBooty;
+    delete staker;
   }
-  */
+
+  // TODO as-is, the contract doesnt allow for dynamic stake allocation - you can only extend
+  // the entire stake, or withdraw the entire stake. Even if you could withdraw partial stake,
+  // you would still be making the decision to extend the entire stake, or not.
+  // - allow staker to split stake (or move some fraction under a new address)
+  // - accept that you have to extend the entire stake, and plan ahead accordingly
+  //   - split the stake up into several portions, and decide to extend / not each portion
 }

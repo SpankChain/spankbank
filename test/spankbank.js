@@ -472,15 +472,22 @@ contract('SpankBank', accounts => {
       assert.equal(p2BootyBalance, 325)
     })
 
-    it.skip('checkin owner', async () => {
+    it.skip('checkin owner', async () => {})
+    it.skip('checkin p2', async () => {})
 
-    })
+    it('withdraw stake p1', async () => {
+      spankbank.withdrawStake({ from: p1 })
 
-    it.skip('checkin p2', async () => {
+      const p1SpankBalance = await spankToken.balanceOf.call(p1)
+      assert.equal(p1SpankBalance, 100)
 
-    })
+      const spankbankSpankBalance = await spankToken.balanceOf.call(spankbank.address)
+      assert.equal(spankbankSpankBalance, 200)
 
-    it.skip('withdraw stake p1', async () => {
+      const staker = await spankbank.stakers(p1)
+      console.log(staker.stakerAddress)
+      assert.equal(staker.stakerAddress, 0)
+
 
     })
 
