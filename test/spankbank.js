@@ -12,19 +12,6 @@ const data = JSON.parse(fs.readFileSync(`${__dirname}/../data.json`))
 
 let spankbank, spankToken, bootyToken
 
-// TODO we are deploying the spank token now, but wont when we do it for
-// real - how to test around this? spankAddress is a constructor arg
-// we need two different migrations, one for non-mainnet tests (we
-// redeploy)
-// when we do it for real we will use the spank token address
-
-/*
-const verify_deployment = () => {
-  it('verify deployment', async () => {
-
-  })
-}*/
-
 contract('SpankBank', accounts => {
   const owner = accounts[0]
   const p1 = accounts[1]
@@ -486,7 +473,8 @@ contract('SpankBank', accounts => {
       assert.equal(spankStaked, 0)
     })
 
-    // TODO test booty withdrawals on previous states
-    // TODO test failed checkins
+    // TODO test booty withdrawals on previous periods
+    // TODO test failed checkins (stake expired, already checked in)
+    // TODO test failed staking (stake expired, already staking)
   })
 })
