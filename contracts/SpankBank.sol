@@ -33,10 +33,7 @@ contract SpankBank {
   uint256 public currentPeriod = 0;
 
   struct Staker {
-    // TODO do we need stakerAddress? Right now it is being used to check existence
-    address stakerAddress; // the address of the staker
     uint256 spankStaked; // the amount of spank staked
-
     uint256 startingPeriod; // the period this staker started staking
     uint256 endingPeriod; // the period after which this stake expires
     mapping(uint256 => uint256) spankPoints; // the spankPoints per period
@@ -99,7 +96,7 @@ contract SpankBank {
     require(spankAmount > 0); // stake must be greater than 0
 
     // the msg.sender must not have an active staking position
-    require(stakers[msg.sender].stakerAddress == 0);
+    require(stakers[msg.sender].startingPeriod == 0 && stakers[msg.sender].endingPeriod == 0);
 
     // transfer SPANK to this contract - assumes sender has already "allowed" the spankAmount
     require(spankToken.transferFrom(msg.sender, this, spankAmount));
@@ -107,7 +104,7 @@ contract SpankBank {
     // The spankAmount of spankPoints the user will have during the next staking period
     uint256 nextSpankPoints = SafeMath.div( SafeMath.mul(spankAmount, pointsTable[stakePeriods]), 100 );
 
-    stakers[msg.sender] = Staker(msg.sender, spankAmount, currentPeriod + 1, currentPeriod + stakePeriods);
+    stakers[msg.sender] = Staker(spankAmount, currentPeriod + 1, currentPeriod + stakePeriods);
 
     stakers[msg.sender].spankPoints[currentPeriod + 1] = nextSpankPoints;
 
@@ -188,6 +185,8 @@ contract SpankBank {
 
     Staker storage staker = stakers[msg.sender];
 
+    require(currentPeriod < staker.endingPeriod);
+
     if (updatedEndingPeriod > 0) {
       // TODO I'm not sure we can rely on the staker.endingPeriod to be greater than the
       // currentPeriod - what if the staker expires but never withdraws their stake?
@@ -244,9 +243,7 @@ contract SpankBank {
 
     spankToken.transfer(msg.sender, staker.spankStaked);
 
-    delete staker.spankPoints;
-    delete staker.didClaimBooty;
-    delete staker;
+    staker.spankStaked = 0;
   }
 
   // TODO as-is, the contract doesnt allow for dynamic stake allocation - you can only extend

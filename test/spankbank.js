@@ -78,8 +78,7 @@ contract('SpankBank', accounts => {
       assert.equal(totalSpankStaked, 100)
 
       const staker = await spankbank.stakers(owner)
-      const [stakerAddress, spankStaked, startingPeriod, endingPeriod] = staker
-      assert.equal(owner, stakerAddress)
+      const [spankStaked, startingPeriod, endingPeriod] = staker
       assert.equal(spankStaked, 100)
       assert.equal(startingPeriod, 1)
       assert.equal(endingPeriod, 12)
@@ -106,8 +105,7 @@ contract('SpankBank', accounts => {
       assert.equal(totalSpankStaked, 200)
 
       const staker = await spankbank.stakers(p1)
-      const [stakerAddress, spankStaked, startingPeriod, endingPeriod] = staker
-      assert.equal(p1, stakerAddress)
+      const [spankStaked, startingPeriod, endingPeriod] = staker
       assert.equal(spankStaked, 100)
       assert.equal(startingPeriod, 1)
       assert.equal(endingPeriod, 2)
@@ -164,7 +162,7 @@ contract('SpankBank', accounts => {
       await spankbank.checkIn(13)
 
       const staker = await spankbank.stakers(owner)
-      const [,,,endingPeriod] = staker
+      const [,, endingPeriod] = staker
       assert.equal(endingPeriod, 13)
 
       const spankPoints = await spankbank.getSpankPoints.call(owner, 2)
@@ -179,7 +177,7 @@ contract('SpankBank', accounts => {
       await spankbank.checkIn(0, { from: p1 })
 
       const staker = await spankbank.stakers(p1)
-      const [,,,endingPeriod] = staker
+      const [,, endingPeriod] = staker
       assert.equal(endingPeriod, 2)
 
       const spankPoints = await spankbank.getSpankPoints.call(p1, 2)
@@ -199,8 +197,7 @@ contract('SpankBank', accounts => {
       assert.equal(totalSpankStaked, 300)
 
       const staker = await spankbank.stakers(p2)
-      const [stakerAddress, spankStaked, startingPeriod, endingPeriod] = staker
-      assert.equal(p2, stakerAddress)
+      const [spankStaked, startingPeriod, endingPeriod] = staker
       assert.equal(spankStaked, 100)
       assert.equal(startingPeriod, 2)
       assert.equal(endingPeriod, 7)
@@ -324,7 +321,7 @@ contract('SpankBank', accounts => {
       await spankbank.checkIn(14)
 
       const staker = await spankbank.stakers(owner)
-      const [,,,endingPeriod] = staker
+      const [,, endingPeriod] = staker
       assert.equal(endingPeriod, 14)
 
       const spankPoints = await spankbank.getSpankPoints.call(owner, 3)
@@ -339,7 +336,7 @@ contract('SpankBank', accounts => {
       await spankbank.checkIn(0, { from: p2 })
 
       const staker = await spankbank.stakers(p2)
-      const [,,,endingPeriod] = staker
+      const [,, endingPeriod] = staker
       assert.equal(endingPeriod, 7)
 
       const spankPoints = await spankbank.getSpankPoints.call(p2, 3)
@@ -395,7 +392,7 @@ contract('SpankBank', accounts => {
     })
 
     it('claim_booty owner', async () => {
-      await spankbank.claimBooty(2)
+     await spankbank.claimBooty(2)
 
       const didClaimBooty = await spankbank.getDidClaimBooty.call(owner, 2)
       assert.equal(didClaimBooty, true)
@@ -485,12 +482,11 @@ contract('SpankBank', accounts => {
       assert.equal(spankbankSpankBalance, 200)
 
       const staker = await spankbank.stakers(p1)
-      console.log(staker.stakerAddress)
-      assert.equal(staker.stakerAddress, 0)
-
-
+      const [spankStaked] = staker
+      assert.equal(spankStaked, 0)
     })
 
     // TODO test booty withdrawals on previous states
+    // TODO test failed checkins
   })
 })
