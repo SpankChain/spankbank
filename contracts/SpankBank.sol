@@ -227,11 +227,12 @@ contract SpankBank {
     uint256 bootyMinted = period.bootyMinted;
     uint256 totalSpankPoints = period.totalSpankPoints;
 
-    uint256 stakerSpankPoints = staker.spankPoints[_period];
+    if (totalSpankPoints > 0) {
+      uint256 stakerSpankPoints = staker.spankPoints[_period];
+      uint256 bootyOwed = SafeMath.div(SafeMath.mul(stakerSpankPoints, bootyMinted), totalSpankPoints);
 
-    uint256 bootyOwed = SafeMath.div( SafeMath.mul( stakerSpankPoints, bootyMinted), totalSpankPoints);
-
-    require(bootyToken.transfer(msg.sender, bootyOwed));
+      require(bootyToken.transfer(msg.sender, bootyOwed));
+    }
   }
 
   /*
