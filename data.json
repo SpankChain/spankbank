@@ -7,7 +7,7 @@
     },
     "spankbank": {
         "periodLength": 2592000,
-        "initialBootySupply": 500,
+        "initialBootySupply": 10000,
         "maxPeriods": 12
     }
 }

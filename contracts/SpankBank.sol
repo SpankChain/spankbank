@@ -181,6 +181,37 @@ contract SpankBank {
     }
   }
 
+  // In order to receive Booty, each staker will have to check-in every period.
+  // This check-in will compute the spankPoints locally and globally for each staker.
+  function checkIn(uint256 updatedEndingPeriod) {
+    updatePeriod();
+
+    Staker storage staker = stakers[msg.sender];
+
+    if (updatedEndingPeriod > 0) {
+      // TODO I'm not sure we can rely on the staker.endingPeriod to be greater than the
+      // currentPeriod - what if the staker expires but never withdraws their stake?
+      require(updatedEndingPeriod > currentPeriod);
+      require(updatedEndingPeriod > staker.endingPeriod);
+      require(updatedEndingPeriod <= currentPeriod + maxPeriods);
+
+      staker.endingPeriod = updatedEndingPeriod;
+    }
+
+    uint256 stakePeriods = staker.endingPeriod - currentPeriod;
+
+    // TODO combine this and the code from stake into their own function to reduce dup
+
+    // The spankAmount of spankPoints the user will have during the next staking period
+    uint256 nextSpankPoints = SafeMath.div(SafeMath.mul(staker.spankStaked, pointsTable[stakePeriods]), 100);
+
+    staker.spankPoints[currentPeriod + 1] = nextSpankPoints;
+
+    uint256 nextTotalSpankPoints = periods[currentPeriod + 1].totalSpankPoints;
+    nextTotalSpankPoints = SafeMath.add(nextTotalSpankPoints, nextSpankPoints);
+    periods[currentPeriod + 1].totalSpankPoints = nextTotalSpankPoints;
+  }
+
   function claimBooty(uint256 _period) {
     updatePeriod();
 
