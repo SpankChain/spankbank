@@ -476,5 +476,10 @@ contract('SpankBank', accounts => {
     // TODO test booty withdrawals on previous periods
     // TODO test failed checkins (stake expired, already checked in)
     // TODO test failed staking (stake expired, already staking)
+    // TODO test recovery from skipped checkin
+    // TODO test recovery from skipped booty minting
+    // TODO test failed claimBooty on future periods
+
+    // TODO test every require case and make it fail
   })
 })
