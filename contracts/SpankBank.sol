@@ -96,12 +96,14 @@ contract SpankBank {
     require(spankAmount > 0); // stake must be greater than 0
 
     // the msg.sender must not have an active staking position
+    // TODO checking that endingPeriod == 0 should cover all periods
     require(stakers[msg.sender].startingPeriod == 0 && stakers[msg.sender].endingPeriod == 0);
 
     // transfer SPANK to this contract - assumes sender has already "allowed" the spankAmount
     require(spankToken.transferFrom(msg.sender, this, spankAmount));
 
     // The spankAmount of spankPoints the user will have during the next staking period
+    // TODO the division is unnecessary - we're only dividing by the total
     uint256 nextSpankPoints = SafeMath.div( SafeMath.mul(spankAmount, pointsTable[stakePeriods]), 100 );
 
     stakers[msg.sender] = Staker(spankAmount, currentPeriod + 1, currentPeriod + stakePeriods);
@@ -245,6 +247,13 @@ contract SpankBank {
 
     staker.spankStaked = 0;
   }
+
+  /*
+  function splitStake(address newAddress, uint256 spankAmount) {
+    Staker storage staker = stakers[msg.sender];
+
+    stakers[newAddress] = Staker(spankAmount, currentPeriod + 1, currentPeriod + stakePeriods);
+  }*/
 
   // TODO as-is, the contract doesnt allow for dynamic stake allocation - you can only extend
   // the entire stake, or withdraw the entire stake. Even if you could withdraw partial stake,

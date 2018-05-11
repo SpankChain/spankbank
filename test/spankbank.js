@@ -479,6 +479,7 @@ contract('SpankBank', accounts => {
     // TODO test recovery from skipped checkin
     // TODO test recovery from skipped booty minting
     // TODO test failed claimBooty on future periods
+    // TODO test failed withdraw before ending period
 
     // TODO test every require case and make it fail
   })
