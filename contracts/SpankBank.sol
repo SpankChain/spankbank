@@ -1,7 +1,7 @@
 pragma solidity 0.4.23;
-import {SafeMath} from './SafeMath.sol';
-import {HumanStandardToken} from './HumanStandardToken.sol';
-import {MintableToken} from './MintableToken.sol';
+import {SafeMath} from "./SafeMath.sol";
+import {HumanStandardToken} from "./HumanStandardToken.sol";
+import {MintableToken} from "./MintableToken.sol";
 
 contract SpankBank {
 
@@ -58,7 +58,7 @@ contract SpankBank {
     uint256 _periodLength,
     uint256 _maxPeriods,
     uint256 initialBootySupply
-  ) {
+  )  public {
     spankAddress = _spankAddress;
     periodLength = _periodLength;
     spankToken = HumanStandardToken(spankAddress);
@@ -89,7 +89,7 @@ contract SpankBank {
   }
 
   // Used to create a new staking position - verifies that the caller is not staking
-  function stake(uint256 spankAmount, uint256 stakePeriods) {
+  function stake(uint256 spankAmount, uint256 stakePeriods)  public {
     updatePeriod();
 
     require(stakePeriods > 0 && stakePeriods <= maxPeriods); // stake 1-12 (max) periods
@@ -115,11 +115,11 @@ contract SpankBank {
     periods[currentPeriod + 1].totalSpankPoints = nextTotalSpankPoints;
   }
 
-  function getSpankPoints(address stakerAddress, uint256 period) returns (uint256) {
+  function getSpankPoints(address stakerAddress, uint256 period) public returns (uint256)  {
     return stakers[stakerAddress].spankPoints[period];
   }
 
-  function getDidClaimBooty(address stakerAddress, uint256 period) returns (bool) {
+  function getDidClaimBooty(address stakerAddress, uint256 period) public returns (bool)  {
     return stakers[stakerAddress].didClaimBooty[period];
   }
 
@@ -135,7 +135,7 @@ contract SpankBank {
   // Does the minting depends on current stake or next?
   // If I start staking at 10.5, my stake will only matter for 11, and the BOOTY generated after 11 will be based on the fees paid during 11, and can only be collected after 11 is done
 
-  function sendFees(uint256 bootyAmount) {
+  function sendFees(uint256 bootyAmount)  public {
     updatePeriod();
 
     require(bootyAmount > 0); // fees must be greater than 0
@@ -148,7 +148,7 @@ contract SpankBank {
     periods[currentPeriod].bootyFees = currentBootyFees;
   }
 
-  function mintBooty() {
+  function mintBooty()  public {
     updatePeriod();
 
     Period storage period = periods[currentPeriod - 1];
@@ -171,7 +171,7 @@ contract SpankBank {
   // - can also be called externally, but there isn't a good reason for why you would want to
   // - the while loop protects against the edge case where we miss a period
 
-  function updatePeriod() {
+  function updatePeriod()  public {
     while (now >= periods[currentPeriod].endTime) {
       Period memory prevPeriod = periods[currentPeriod];
       currentPeriod += 1;
@@ -182,7 +182,7 @@ contract SpankBank {
 
   // In order to receive Booty, each staker will have to check-in every period.
   // This check-in will compute the spankPoints locally and globally for each staker.
-  function checkIn(uint256 updatedEndingPeriod) {
+  function checkIn(uint256 updatedEndingPeriod)  public {
     updatePeriod();
 
     Staker storage staker = stakers[msg.sender];
@@ -213,7 +213,7 @@ contract SpankBank {
     periods[currentPeriod + 1].totalSpankPoints = nextTotalSpankPoints;
   }
 
-  function claimBooty(uint256 _period) {
+  function claimBooty(uint256 _period)  public {
     updatePeriod();
 
     require(_period < currentPeriod); // can only claim booty for previous periods
@@ -236,7 +236,7 @@ contract SpankBank {
     }
   }
 
-  function withdrawStake() {
+  function withdrawStake()  public {
     updatePeriod();
 
     Staker storage staker = stakers[msg.sender];
