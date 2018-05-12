@@ -248,12 +248,17 @@ contract SpankBank {
     staker.spankStaked = 0;
   }
 
-  /*
-  function splitStake(address newAddress, uint256 spankAmount) {
+  function splitStake(address newAddress, uint256 spankAmount) public {
+    require(newAddress != address(0));
+    require(spankAmount > 0);
+    
     Staker storage staker = stakers[msg.sender];
+    require(currentPeriod < staker.endingPeriod);
+    require(spankAmount <= staker.spankStaked);
+    staker.spankStaked = SafeMath.sub(staker.spankStaked, spankAmount);
 
-    stakers[newAddress] = Staker(spankAmount, currentPeriod + 1, currentPeriod + stakePeriods);
-  }*/
+    stakers[newAddress] = Staker(spankAmount, staker.startingPeriod, staker.endingPeriod);
+  }
 
   // TODO as-is, the contract doesnt allow for dynamic stake allocation - you can only extend
   // the entire stake, or withdraw the entire stake. Even if you could withdraw partial stake,
