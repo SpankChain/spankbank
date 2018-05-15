@@ -245,6 +245,8 @@ contract SpankBank {
   }
 
   function splitStake(address newAddress, uint256 spankAmount) public {
+    updatePeriod();
+
     require(newAddress != address(0));
     require(spankAmount > 0);
 

@@ -355,10 +355,16 @@ It is possible for a staker to call `withdrawStake` multiple times, but because 
 
 #### splitStake
 
-Used by stakers to transfer some or all of their stakes to new addresses.
+Used by stakers to transfer `spankAmount` of their staked SPANK (up to 100%) to the provided `newAddress`.
+
+1. Updates the period.
+2. Subtracts the `spankAmount` to split from `staker.spankStaked`.
+3.
 
 ```
   function splitStake(address newAddress, uint256 spankAmount) public {
+    updatePeriod();
+
     require(newAddress != address(0));
     require(spankAmount > 0);
 
@@ -454,3 +460,11 @@ This uncertainty would make it less likely for people to stake in the first plac
 Alternatively, it would force users to manage multiple stakes and multiple addresses and have to decide in advance how to divide up their stakes - this seems cumbersome and is easily avoided by allowing the user to split their stake later on
 This also helps address security issues around staking - if a staker’s account is compromised, we want them to be able to change the address to a new account
 This doesn’t work if we don’t allow splitStake after checking in
+
+
+
+Meta
+Will the documentation include the comments? Seems redundant if it doesn’t
+
+
+
