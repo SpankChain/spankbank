@@ -8,9 +8,6 @@ contract SpankBank {
   /***********************************
   VARIABLES SET AT CONTRACT DEPLOYMENT
   ************************************/
-  // ADDRESSES DEFINED AT DEPLOYMENT
-  address public spankAddress;
-
   // GLOBAL CONSTANT VARIABLES
   uint256 public periodLength; // time length of each period in seconds
   uint256 public maxPeriods;
@@ -21,8 +18,8 @@ contract SpankBank {
   MintableToken public bootyToken;
 
   // LOOKUP TABLE FOR SPANKPOINTS BY PERIOD
-  // 1 -> 40%
-  // 2 -> 45%
+  // 1 -> 45%
+  // 2 -> 50%
   // ...
   // 12 -> 100%
   mapping(uint256 => uint256) pointsTable;
@@ -37,34 +34,33 @@ contract SpankBank {
     uint256 startingPeriod; // the period this staker started staking
     uint256 endingPeriod; // the period after which this stake expires
     mapping(uint256 => uint256) spankPoints; // the spankPoints per period
-    mapping(uint256 => bool) didClaimBooty;
+    mapping(uint256 => bool) didClaimBooty; // true if staker claimed BOOTY for that period
   }
 
   mapping(address => Staker) public stakers;
 
   struct Period {
-    uint256 bootyFees;
-    uint256 totalSpankPoints; // the total spankPoints of all stakers per period
-    uint256 bootyMinted;
-    bool mintingComplete;
-    uint256 startTime;
-    uint256 endTime;
+    uint256 bootyFees; // the amount of BOOTY collected in fees
+    uint256 totalSpankPoints; // the total spankPoints of all stakers
+    uint256 bootyMinted; // the amount of BOOTY minted
+    bool mintingComplete; // true if BOOTY has already been minted for this period
+    uint256 startTime; // the starting unix timestamp in seconds
+    uint256 endTime; // the ending unix timestamp in seconds
   }
 
   mapping(uint256 => Period) public periods;
 
   function SpankBank (
-    address _spankAddress,
     uint256 _periodLength,
     uint256 _maxPeriods,
+    address spankAddress,
     uint256 initialBootySupply
   )  public {
-    spankAddress = _spankAddress;
     periodLength = _periodLength;
+    maxPeriods = _maxPeriods;
     spankToken = HumanStandardToken(spankAddress);
     bootyToken = new MintableToken();
     bootyToken.mint(this, initialBootySupply);
-    maxPeriods = _maxPeriods;
 
     uint256 startTime = now;
 
@@ -89,7 +85,7 @@ contract SpankBank {
   }
 
   // Used to create a new staking position - verifies that the caller is not staking
-  function stake(uint256 spankAmount, uint256 stakePeriods)  public {
+  function stake(uint256 spankAmount, uint256 stakePeriods) public {
     updatePeriod();
 
     require(stakePeriods > 0 && stakePeriods <= maxPeriods); // stake 1-12 (max) periods
@@ -135,7 +131,7 @@ contract SpankBank {
   // Does the minting depends on current stake or next?
   // If I start staking at 10.5, my stake will only matter for 11, and the BOOTY generated after 11 will be based on the fees paid during 11, and can only be collected after 11 is done
 
-  function sendFees(uint256 bootyAmount)  public {
+  function sendFees(uint256 bootyAmount) public {
     updatePeriod();
 
     require(bootyAmount > 0); // fees must be greater than 0
@@ -148,7 +144,7 @@ contract SpankBank {
     periods[currentPeriod].bootyFees = currentBootyFees;
   }
 
-  function mintBooty()  public {
+  function mintBooty() public {
     updatePeriod();
 
     Period storage period = periods[currentPeriod - 1];
@@ -171,7 +167,7 @@ contract SpankBank {
   // - can also be called externally, but there isn't a good reason for why you would want to
   // - the while loop protects against the edge case where we miss a period
 
-  function updatePeriod()  public {
+  function updatePeriod() public {
     while (now >= periods[currentPeriod].endTime) {
       Period memory prevPeriod = periods[currentPeriod];
       currentPeriod += 1;
@@ -213,7 +209,7 @@ contract SpankBank {
     periods[currentPeriod + 1].totalSpankPoints = nextTotalSpankPoints;
   }
 
-  function claimBooty(uint256 _period)  public {
+  function claimBooty(uint256 _period) public {
     updatePeriod();
 
     require(_period < currentPeriod); // can only claim booty for previous periods
@@ -236,7 +232,7 @@ contract SpankBank {
     }
   }
 
-  function withdrawStake()  public {
+  function withdrawStake() public {
     updatePeriod();
 
     Staker storage staker = stakers[msg.sender];
@@ -251,7 +247,7 @@ contract SpankBank {
   function splitStake(address newAddress, uint256 spankAmount) public {
     require(newAddress != address(0));
     require(spankAmount > 0);
-    
+
     Staker storage staker = stakers[msg.sender];
     require(currentPeriod < staker.endingPeriod);
     require(spankAmount <= staker.spankStaked);

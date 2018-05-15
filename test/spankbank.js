@@ -26,8 +26,8 @@ contract('SpankBank', accounts => {
 
   describe('initialization', async () => {
     it('contract deployment', async () => {
-      const spankAddress = await spankbank.spankAddress()
-      assert.equal(spankAddress, spankToken.address)
+      const spankTokenAddress = await spankbank.spankToken()
+      assert.equal(spankTokenAddress, spankToken.address)
 
       const periodLength = await spankbank.periodLength()
       assert.equal(periodLength, data.spankbank.periodLength)
