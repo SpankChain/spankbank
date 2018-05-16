@@ -143,9 +143,10 @@ contract SpankBank {
 
     bootyToken.burn(bootyAmount);
 
-    uint256 currentBootyFees = periods[currentPeriod].bootyFees;
-    currentBootyFees = SafeMath.add(bootyAmount, currentBootyFees);
-    periods[currentPeriod].bootyFees = currentBootyFees;
+    // uint256 currentBootyFees = periods[currentPeriod].bootyFees;
+    // currentBootyFees = SafeMath.add(bootyAmount, currentBootyFees);
+    // periods[currentPeriod].bootyFees = currentBootyFees;
+    periods[currentPeriod].bootyFees = SafeMath.add(periods[currentPeriod].bootyFees, bootyAmount);
   }
 
   function mintBooty()  public {
@@ -249,12 +250,21 @@ contract SpankBank {
   }
 
   function splitStake(address newAddress, uint256 spankAmount) public {
+    updatePeriod();
+
     require(newAddress != address(0));
     require(spankAmount > 0);
+    
+    Staker memory newStaker = stakers[newAddress];
+    require(newStaker.spankStaked == 0);
+    require(newStaker.startingPeriod == 0); 
+    require(newStaker.endingPeriod == 0);
     
     Staker storage staker = stakers[msg.sender];
     require(currentPeriod < staker.endingPeriod);
     require(spankAmount <= staker.spankStaked);
+    require(staker.spankPoints[currentPeriod + 1] == 0);
+    
     staker.spankStaked = SafeMath.sub(staker.spankStaked, spankAmount);
 
     stakers[newAddress] = Staker(spankAmount, staker.startingPeriod, staker.endingPeriod);
