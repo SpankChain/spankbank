@@ -366,9 +366,6 @@ Used by stakers to transfer `spankAmount` of their staked SPANK (up to 100%) to
 the provided `newAddress`. Can only be called before the staker checks in for
 a period.
 
-TODO - current function does not enforce that splitStake must be called after
-check in
-
 1. Updates the period.
 2. Subtracts the `spankAmount` to split from `staker.spankStaked`.
 3. Create and save a new `Staker` with the transferred `spankAmount`, and the
