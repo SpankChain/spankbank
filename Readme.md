@@ -90,7 +90,7 @@ The data for each period is set in the following order:
 
 ## Functions
 
-#### SpankBank Constructor
+### SpankBank Constructor
 
 1. Saves the passed in `periodLength` and `maxPeriods` as global constants.
 2. Builds and saves the SPANK token reference from the passed in `spankAddress`.
@@ -135,14 +135,14 @@ The data for each period is set in the following order:
   }
 ```
 
-##### Bootstrapping BOOTY
+#### Bootstrapping BOOTY
 
 The initial BOOTY balance is sent to the `msg.sender` to be distributed to all
 period 0 stakers through a token airdrop. The airdrop will take place at the end
 of period 0 (30 days from SpankBank deployment) and will be based on each
 staker's `spankPoints` for period 1.
 
-#### updatePeriod
+### updatePeriod
 
 In order to make sure all interactions with the SpankBank take place during the correct period, the `updatePeriod` function is called at the beginning of every state-updating function.
 
@@ -162,7 +162,7 @@ The reason this is done using a `while` loop is just in case an entire period pa
 
 One scenario the `updatePeriod` function does not protect against is if enough periods pass without any SpankBank interactions that in order to catch up to the current period the `while` loop has to run enough times that its execution uses more gas than the gas limit of a single block. The `updatePeriod` function uses 21272 gas so at the current 8M gas limit it would take 31 years of not interacting with the `SpankBank` for this to happen.
 
-#### stake
+### stake
 
 Used to open a new staking position with `spankAmount` SPANK tokens for a length of `stakePeriods` periods.
 
@@ -199,7 +199,7 @@ Used to open a new staking position with `spankAmount` SPANK tokens for a length
   }
 ```
 
-#### sendFees
+### sendFees
 
 Used to send `bootyAmount` BOOTY tokens in fees to the SpankBank, which are then counted and burned.
 
@@ -223,7 +223,7 @@ Used to send `bootyAmount` BOOTY tokens in fees to the SpankBank, which are then
   }
 ```
 
-#### mintBooty
+### mintBooty
 
 Used to mint new BOOTY based on the total fees from the previous period.
 
@@ -254,7 +254,7 @@ Used to mint new BOOTY based on the total fees from the previous period.
 
 If `mintBooty` is skipped for a period, the impact would be that the stakers for that period would not receive their BOOTY, which would especially hurt stakers that are exiting after that period. Overall, the impact would be minimal, as any reduction in the total BOOTY supply would be made up when `mintBooty` was called during the next period.
 
-#### claimBooty
+### claimBooty
 
 Used by stakers to withdraw their share of the BOOTY minted for a previous period.
 
@@ -288,7 +288,7 @@ Used by stakers to withdraw their share of the BOOTY minted for a previous perio
 
 Because `claimBooty` accepts a period to retrieve BOOTY for, it allows for stakers to be lazy and store their BOOTY with the SpankBank indefinitely until they are ready to withdraw.
 
-#### checkIn
+### checkIn
 
 Used by stakers to establish their eligibility for receiving BOOTY for the next period. Can also optionally extend the staker's `endingPeriod`.
 
@@ -337,7 +337,7 @@ The motivation for requiring check ins was to avoid requiring iterating over an 
 
 Another reason for requiring check ins is to address the possibility of stakers losing their keys or going permanently offline (e.g. death), in which case we would prefer their share of newly minted BOOTY to be distributed to the remaining stakers.
 
-#### withdrawStake
+### withdrawStake
 
 Used by stakers to withdraw their staked SPANK after their stake's `endingPeriod` has passed.
 
@@ -360,7 +360,7 @@ Used by stakers to withdraw their staked SPANK after their stake's `endingPeriod
 ```
 It is possible for a staker to call `withdrawStake` multiple times, but because after the first time the `staker.spankStaked` would be zero, future calls would simply transfer zero SPANK to the staker.
 
-#### splitStake
+### splitStake
 
 Used by stakers to transfer `spankAmount` of their staked SPANK (up to 100%) to
 the provided `newAddress`. Can only be called before the staker checks in for
