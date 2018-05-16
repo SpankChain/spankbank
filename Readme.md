@@ -14,7 +14,7 @@ In the future, we plan to add features to incentivize decentralized moderation o
 
 ## Usage
 
-SPANK holders can stake their SPANK tokens with the SpankBank for up to 12 (30 day) periods by calling the `stake` function. BOOTY fees can be paid to the SpankBank by anyone by calling the `sendFees` function. When a new period starts, anyone can mint BOOTY for the previous period by calling the `mintBooty` function. Once BOOTY has been minted for a period, the stakers for that period can call the `claimBooty` function to claim their BOOTY. In order to be eligible to receive BOOTY, during each staking period stakers have to check in with the SpankBank by calling the `checkIn` function. Stakers can optionally extend their stake for additional periods when checking in. When a staker's stake has expired, they can withdraw their staked SPANK using the `withdrawStake` function.
+SPANK holders can stake their SPANK tokens with the SpankBank for up to 12 (30 day) periods by calling the `stake` function. BOOTY fees can be paid to the SpankBank by anyone by calling the `sendFees` function. When a new period starts, anyone can mint BOOTY for the previous period by calling the `mintBooty` function. Once BOOTY has been minted for a previous period, the stakers for that period can call the `claimBooty` function to claim their BOOTY. In order to be eligible to receive BOOTY, during each staking period stakers have to check in with the SpankBank by calling the `checkIn` function. Stakers can optionally extend their stake for additional periods when checking in. When a staker's stake has expired, they can withdraw their staked SPANK using the `withdrawStake` function.
 
 If stakers want to only partially extend their stake (e.g. extend only 50% of their stake by an additional month, not all of it) or to transfer some of their stake to a new address (e.g. for security reasons) they can do so by calling the `splitStake` function.
 
@@ -134,6 +134,13 @@ The data for each period is set in the following order:
     pointsTable[12] = 100;
   }
 ```
+
+##### Bootstrapping BOOTY
+
+The initial BOOTY balance is sent to the `msg.sender` to be distributed to all
+period 0 stakers through a token airdrop. The airdrop will take place at the end
+of period 0 (30 days from SpankBank deployment) and will be based on each
+staker's `spankPoints` for period 1.
 
 #### updatePeriod
 
@@ -355,11 +362,17 @@ It is possible for a staker to call `withdrawStake` multiple times, but because 
 
 #### splitStake
 
-Used by stakers to transfer `spankAmount` of their staked SPANK (up to 100%) to the provided `newAddress`.
+Used by stakers to transfer `spankAmount` of their staked SPANK (up to 100%) to
+the provided `newAddress`. Can only be called before the staker checks in for
+a period.
+
+TODO - current function does not enforce that splitStake must be called after
+check in
 
 1. Updates the period.
 2. Subtracts the `spankAmount` to split from `staker.spankStaked`.
-3.
+3. Create and save a new `Staker` with the transferred `spankAmount`, and the
+   same `startingPeriod` and `endingPeriod` as the original staker.
 
 ```
   function splitStake(address newAddress, uint256 spankAmount) public {
@@ -368,103 +381,37 @@ Used by stakers to transfer `spankAmount` of their staked SPANK (up to 100%) to 
     require(newAddress != address(0));
     require(spankAmount > 0);
 
+    Staker memory newStaker = stakers[newAddress];
+    // the newAddress can't belong to someone who is already staking
+    require(newStaker.spankStaked == 0);
+    require(newStaker.startingPeriod == 0);
+    require(newStaker.endingPeriod == 0);
+
     Staker storage staker = stakers[msg.sender];
-    require(currentPeriod < staker.endingPeriod);
-    require(spankAmount <= staker.spankStaked);
+    require(currentPeriod < staker.endingPeriod); // can't split after your
+    stake expires
+    require(spankAmount <= staker.spankStaked); // can't split more than your
+    stake
+    require(staker.spankPoints[currentPeriod + 1] == 0); // must splitStake
+    before checking in
     staker.spankStaked = SafeMath.sub(staker.spankStaked, spankAmount);
 
     stakers[newAddress] = Staker(spankAmount, staker.startingPeriod, staker.endingPeriod);
   }
 ```
 
-Questions
-What is the purpose of the spankbank?
-Refer to whitepaper
-How does it work as a user?
-How does bootstrapping work?
-Design motivations?
-Simplicity - less code the better
-Legibility - should be easily understood by other developers
-CheckIn system
-Didn’t want to have a single function which mints booty for everyone
-Would need to iterate over all stakers, calculate their spankpoints
-This presents an attack vector to fill up the array or make it expensive to iterate through
-Would need to be countered by having a minimum spank stake, which we don’t necessarily want
-CheckIn allows us to cumulatively calculate the totalSpankPoints, which means we don’t have to store and array and iterate over it
-Data Structures
-Staker
-Represents a staking position
-1 account per staking position
-spankStaked - the amount of staked spank
-startingPeriod - the starting period for this staking position (the period after the stake function was called)
-endingPeriod - the ending period for this staking position (can be optionally extended when calling the checkIn function)
-Stakers
-A mapping of staker addresses to their staking positions
-Period
-bootyFees - the amount of BOOTY paid in fees
-totalSpankPoints - the total spankPoints of all stakers per period
-bootyMinted - the amount of BOOTY minted for this period (set when mintBooty is called in the next period)
-bool mintingComplete - true if mintBooty has been called for this period
-uint256 startTime - the starting time (in unix seconds) of the period - set in update period
-uint256 endTime - the ending time (in unix seconds) of the period
-Periods - a mapping of period numbers to period structs
-Global Parameters
-maxPeriods
-periodLength
-pointsTable
-currentPeriod
-Contract references
-spankToken
-bootyToken
-Functions
-Questions:
-Function parameters
-How is this function used (in what contexts)
-Show example parameters
-What does the function do? (what write operations does it perform)
-Restrictions on functions usage (when should this not work)
-SpankBank (constructor)
-Constructor args:
-spankAddress - the address of the deployed SPANK token contract
-periodLength - the length of the economic cycle, in seconds
-maxPeriods - the maximum number of periods a staker can stake in advance (e.g. you can stake for at most 1 year into the future)
-initialBootySupply - the amount of BOOTY to be minted initially (it will all be sent to the owner)
-Initializes the global parameters (periodLength, maxPeriods)
-Stores the reference to the SPANK token contract
-Deploys the BOOTY mintable/burnable token contract and stores the reference
-Transfers the initial booty supply to the msg.sender
-Starts period 0 by setting the start time and end time
-Initializes the spankPoints table with hard-coded values
-Stake
-Used to establish a new staking position
-Creates a new staker struct and saves it under the msg.sender address in the stakers mapping
-Transfers SPANK tokens from the sender to the SpankBank contract address
+The motivation for `splitStake` is primarily to allow stakers to be able to
+decide to extend less than their total stake when they check in. Without
+`splitStake`, stakers would be forced during every check in to have to decide to
+either extend their entire stake or not. If a staker wanted to, for example,
+extend 90% of their stake but let 10% gradually expire, they wouldn't be able
+to. They would have to decide to either extend 100% of their stake or let 100%
+of their stake gradually expire.
 
-
-updatePeriod
-What if no one calls updatePeriod for a long enough time that when it is called, the loop runs out of gas and renders the SpankBank unusable
-How long would this actually take? Guess is 100 or so periods
-SendFees
-mintBooty
-What happens if no one calls mintBooty
-Not a big deal, because if consumption remains steady, additional booty would be minted during the next period
-checkIn
-Set spank points for next period
-claimBooty
-Lazy ClaimBooty works - can get booty for previous periods
-withdrawStake
-splitStake
-While we know this will make it easier to sell staked SPANK positions, we think it will improve the user experience of staking
-If we didn’t do this, stakers would always need to keep their entire stake together - they wouldn’t be able to decide, later on after staking, that they only want to 50% of their stake for several more months, and let the rest expire
-This uncertainty would make it less likely for people to stake in the first place - which is the opposite of what we want
-Alternatively, it would force users to manage multiple stakes and multiple addresses and have to decide in advance how to divide up their stakes - this seems cumbersome and is easily avoided by allowing the user to split their stake later on
-This also helps address security issues around staking - if a staker’s account is compromised, we want them to be able to change the address to a new account
-This doesn’t work if we don’t allow splitStake after checking in
-
-
-
-Meta
-Will the documentation include the comments? Seems redundant if it doesn’t
-
-
+To get around this limitation, stakers would likely split their stakes up to be
+controlled by multiple addresses, so they could decide whether or not to extend
+each staking position independently. This would make staking more annoying and require
+unnecessary upfront planning. The `splitStake` function gives stakers more
+flexibility in deciding how much of their stake to extend over time, and
+reduces friction from the initial staking.
 
