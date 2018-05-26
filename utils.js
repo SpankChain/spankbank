@@ -3,6 +3,10 @@ function latestTime() {
   return web3.eth.getBlock('latest').timestamp;
 }
 
+async function blockTime() {
+  return await web3.eth.getBlock('latest').timestamp
+}
+
 // Increases testrpc time by the passed duration in seconds
 function increaseTime(duration) {
   const id = Date.now()
@@ -20,6 +24,27 @@ function increaseTime(duration) {
         jsonrpc: '2.0',
         method: 'evm_mine',
         id: id+1,
+      }, (err2, res) => {
+        return err2 ? reject(err2) : resolve(res)
+      })
+    })
+  })
+}
+
+function fastForward(duration) {
+  return new Promise((resolve, reject) => {
+    web3.currentProvider.sendAsync({
+      jsonrpc: '2.0',
+      method: 'evm_increaseTime',
+      params: [duration],
+      id: Date.now(),
+    }, err1 => {
+      if (err1) return reject(err1)
+
+      web3.currentProvider.sendAsync({
+        jsonrpc: '2.0',
+        method: 'evm_mine',
+        id: Date.now()+1,
       }, (err2, res) => {
         return err2 ? reject(err2) : resolve(res)
       })
@@ -54,5 +79,7 @@ module.exports = {
   latestTime: latestTime,
   increaseTime: increaseTime,
   increaseTimeTo: increaseTimeTo,
-  duration: duration
+  duration: duration,
+  blockTime: blockTime,
+  fastForward, fastForward
 }

@@ -1,18 +1,3 @@
-/*
-[{
-  "stake": 300,
-  "start": 1526390743,
-  "periods": 3,
-  "checkins": [2,2,2],
-  "split": [
-    {
-      "address": "0x123",
-      "amount": 20,
-      "period": 2
-    }
-  ]
-}]
-*/
 function calculate(allStakers, startTime, periodInSecs, periodsToSim) {
   const pointsTable = [0, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]
   for (let period = 0; period <= periodsToSim; period++) {
@@ -45,29 +30,28 @@ function createStakers(token, accounts, numBootstrapStakers, publicKeys, simPeri
   let stakersArray = []
 
   accounts.map(async (account, index) => {
-    let stake = Math.round(Math.random() * 100)
+    let stake = getRandomInt(0, 100)
     let splits = []
     let checkins = []
 
-    await token.transfer(account, stake, {from: accounts[0]})
+    // first numBootstrapStakers elements of accounts stake at period 0
+    if (index >= numBootstrapStakers) {
+      startTime = getRandomInt(startTime + periodLength, endTime)
+    } 
 
-    for (let check = 0; check <= simPeriods; check++) {
-      checkins[check] = getRandomInt(0, maxPeriods)
+    for (let check = 1; check <= simPeriods; check++) {
+      checkins[check] = getRandomInt(0, maxPeriods) + periods
     }
 
     for (let idx = 0; idx < getRandomInt(0, publicKeys.length); idx++) {
       splits.push([publicKeys[getRandomInt(0, publicKeys.length-1)], getRandomInt(0,100)])
     }
 
-    if (index >= numBootstrapStakers) {
-      startTime = getRandomInt(startTime + periodLength, endTime)
-    } 
-
     staker = {
       "address": account,
-      "stake": stake,
-      "start": startTime,
-      "periods": getRandomInt(0, simPeriods),
+      "stake": parseInt(stake),
+      "start": parseInt(startTime),
+      "periods": getRandomInt(1, maxPeriods),
       "checkins": checkins,
       "splits": splits
     }
@@ -77,13 +61,8 @@ function createStakers(token, accounts, numBootstrapStakers, publicKeys, simPeri
   return allStakers
 }
 
-function canStartStaking(staker, startTime, nextPeriodStartTime) {
-  return (staker.start >= startTime && staker.start < nextPeriodStartTime)
-}
-
 module.exports = {
   calculate: calculate,
   createStakers: createStakers,
-  getRandomInt: getRandomInt,
-  canStartStaking: canStartStaking
+  getRandomInt: getRandomInt
 }
