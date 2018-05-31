@@ -17,6 +17,6 @@ module.exports = (deployer, network, accounts) => {
 
   deployer.deploy(SpankToken, data.token.totalSupply, data.token.name, data.token.decimals, data.token.symbol)
     .then(() => {
-      return deployer.deploy(SpankBank, SpankToken.address, data.spankbank.periodLength, data.spankbank.maxPeriods, data.spankbank.initialBootySupply)
+      return deployer.deploy(SpankBank, data.spankbank.periodLength, data.spankbank.maxPeriods, SpankToken.address, data.spankbank.initialBootySupply)
     })
 }
