@@ -1,4 +1,4 @@
-pragma solidity 0.4.23;
+pragma solidity 0.4.24;
 import {SafeMath} from "./SafeMath.sol";
 import {HumanStandardToken} from "./HumanStandardToken.sol";
 import {MintableToken} from "./MintableToken.sol";
@@ -50,7 +50,7 @@ contract SpankBank {
 
   mapping(uint256 => Period) public periods;
 
-  function SpankBank (
+  constructor (
     uint256 _periodLength,
     uint256 _maxPeriods,
     address spankAddress,
@@ -111,11 +111,11 @@ contract SpankBank {
     periods[currentPeriod + 1].totalSpankPoints = nextTotalSpankPoints;
   }
 
-  function getSpankPoints(address stakerAddress, uint256 period) public returns (uint256)  {
+  function getSpankPoints(address stakerAddress, uint256 period) public view returns (uint256)  {
     return stakers[stakerAddress].spankPoints[period];
   }
 
-  function getDidClaimBooty(address stakerAddress, uint256 period) public returns (bool)  {
+  function getDidClaimBooty(address stakerAddress, uint256 period) public view returns (bool)  {
     return stakers[stakerAddress].didClaimBooty[period];
   }
 

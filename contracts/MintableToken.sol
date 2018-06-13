@@ -1,4 +1,4 @@
-pragma solidity ^0.4.15;
+pragma solidity 0.4.24;
 
 import "./OZ_StandardToken.sol";
 import "./OZ_Ownable.sol";
@@ -31,8 +31,8 @@ contract MintableToken is StandardToken, Ownable {
   function mint(address _to, uint256 _amount) onlyOwner canMint public returns (bool) {
     totalSupply_ = totalSupply_.add(_amount);
     balances[_to] = balances[_to].add(_amount);
-    Mint(_to, _amount);
-    Transfer(address(0), _to, _amount);
+    emit Mint(_to, _amount);
+    emit Transfer(address(0), _to, _amount);
     return true;
   }
 
@@ -42,7 +42,7 @@ contract MintableToken is StandardToken, Ownable {
    */
   function finishMinting() onlyOwner canMint public returns (bool) {
     mintingFinished = true;
-    MintFinished();
+    emit MintFinished();
     return true;
   }
 
@@ -68,7 +68,7 @@ contract MintableToken is StandardToken, Ownable {
 
     balances[_who] = balances[_who].sub(_value);
     totalSupply_ = totalSupply_.sub(_value);
-    Burn(_who, _value);
-    Transfer(_who, address(0), _value);
+    emit Burn(_who, _value);
+    emit Transfer(_who, address(0), _value);
   }
 }
