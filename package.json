@@ -1,7 +1,7 @@
 {
   "dependencies": {
-    "solc": "=0.4.15",
+    "solc": "^0.4.24",
     "truffle": "^4.1.11",
-    "truffle-hdwallet-provider": "0.0.5"
+    "truffle-hdwallet-provider": "^0.0.5"
   }
 }
