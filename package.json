@@ -1,7 +1,14 @@
 {
+  "name": "spankbank",
   "dependencies": {
+    "typechain": "^0.2.3"
+  },
+  "devDependencies": {
     "solc": "^0.4.24",
     "truffle": "^4.1.11",
     "truffle-hdwallet-provider": "^0.0.5"
+  },
+  "scripts": {
+    "postinstall": "./node_modules/.bin/typechain --force --outDir ./ts/ './build/contracts/*.json'"
   }
 }
