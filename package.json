@@ -1,4 +1,6 @@
 {
+  "name": "spankbank",
+  "version": "0.0.1",
   "dependencies": {
     "solc": "^0.4.24",
     "truffle": "^4.1.11",
