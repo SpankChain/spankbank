@@ -3,6 +3,7 @@
   "dependencies": {
     "typechain": "^0.2.3"
   },
+  "version": "0.0.1",
   "devDependencies": {
     "solc": "^0.4.24",
     "truffle": "^4.1.11",
