@@ -1,7 +1,8 @@
 pragma solidity 0.4.24;
 
-import "./OZ_StandardToken.sol";
+import "./StandardToken.sol";
 import "./OZ_Ownable.sol";
+import "./SafeMath.sol";
 
 
 /**
@@ -29,8 +30,8 @@ contract MintableToken is StandardToken, Ownable {
    * @return A boolean that indicates if the operation was successful.
    */
   function mint(address _to, uint256 _amount) onlyOwner canMint public returns (bool) {
-    totalSupply_ = totalSupply_.add(_amount);
-    balances[_to] = balances[_to].add(_amount);
+    totalSupply = SafeMath.add(_amount, totalSupply);
+    balances[_to] = SafeMath.add(_amount,balances[_to]);
     emit Mint(_to, _amount);
     emit Transfer(address(0), _to, _amount);
     return true;
@@ -66,8 +67,8 @@ contract MintableToken is StandardToken, Ownable {
     // no need to require value <= totalSupply, since that would imply the
     // sender's balance is greater than the totalSupply, which *should* be an assertion failure
 
-    balances[_who] = balances[_who].sub(_value);
-    totalSupply_ = totalSupply_.sub(_value);
+    balances[_who] = SafeMath.sub(balances[_who],_value);
+    totalSupply = SafeMath.sub(totalSupply,_value);
     emit Burn(_who, _value);
     emit Transfer(_who, address(0), _value);
   }
