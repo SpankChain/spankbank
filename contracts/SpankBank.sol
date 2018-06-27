@@ -450,11 +450,8 @@ contract SpankBank {
 
         staker.votedToClose[currentPeriod] = true;
 
-        Period storage period = periods[currentPeriod];
-        period.closingVotes = SafeMath.add(period.closingVotes, staker.spankStaked);
-
-        uint256 closingTrigger = SafeMath.div(period.totalStakedSpank, 2);
-        if (period.closingVotes > closingTrigger) {
+        uint256 closingTrigger = SafeMath.div(totalSpankStaked, 2);
+        if (totalSpankStaked > closingTrigger) {
             isClosed = true;
         }
 
