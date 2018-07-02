@@ -1,79 +1,106 @@
 pragma solidity 0.4.24;
 import {SafeMath} from "./SafeMath.sol";
 import {HumanStandardToken} from "./HumanStandardToken.sol";
-import {MintableToken} from "./MintableToken.sol";
+import {MintAndBurnToken} from "./MintAndBurnToken.sol";
+import "./BytesLib.sol";
 
 contract SpankBank {
+    using BytesLib for bytes;
 
     event StakeEvent(
         address indexed staker,
-        uint indexed startPeriod,
-        uint indexed endPeriod,
-        address activityKey,
-        address bootyBase
+        uint256 indexed stakePeriods,
+        uint256 indexed startPeriod,
+        address delegateKey,
+        address bootyBase,
+        uint256 currentPeriod
     );
     
     event SendFeesEvent (
         address indexed sender,
-        uint indexed bootyAmount,
-        uint indexed currentBootyFees
+        uint256 indexed bootyAmount,
+        uint256 indexed currentBootyFees,
+        uint256 currentPeriod
     );
 
     event MintBootyEvent (
-        uint indexed targetBootySupply,
-        uint indexed totalBootySupply,
-        uint indexed currentPeriod
+        uint256 indexed targetBootySupply,
+        uint256 indexed totalBootySupply,
+        uint256 indexed currentPeriod
     );
 
     event CheckInEvent (
         address indexed staker,
-        uint indexed updatedEndingPeriod,
-        uint indexed currentPeriod
+        uint256 indexed updatedEndingPeriod,
+        uint256 indexed currentPeriod,
+        address delegateKey,
+        address bootyBase
     );
 
     event ClaimBootyEvent (
         address indexed staker,
-        uint indexed period,
-        uint indexed bootyOwed,
-        uint stakerSpankPoints
+        uint256 indexed period,
+        uint256 indexed bootyOwed,
+        uint256 stakerSpankPoints,
+        uint256 currentPeriod,
+        address delegateKey,
+        address bootyBase
     );
 
     event WithdrawStakeEvent (
         address indexed staker,
-        uint indexed totalSpankStaked,
-        uint indexed currentPeriod
+        uint256 indexed totalSpankToWithdraw,
+        uint256 indexed currentPeriod,
+        uint256 totalSpankStaked,
+        address delegateKey,
+        address bootyBase
         
     );
 
     event SplitStakeEvent (
         address indexed staker,
         address indexed newAddress,
-        uint indexed spankAmount,
-        uint currentPeriod,
-        uint startingPeriod,
-        uint endingPeriod,
-        address activityKey,
+        uint256 indexed spankAmount,
+        uint256 currentPeriod,
+        uint256 startingPeriod,
+        uint256 endingPeriod,
+        address splitDelegateKey,
+        address splitbootyBase,
+        address delegateKey,
         address bootyBase
     );
 
-    event VoteToUnwindEvent (
+    event VoteToCloseEvent (
         address indexed staker,
-        uint indexed spankStaked,
-        bool indexed unwind,
-        uint currentPeriod,
-        uint totalSpankStaked
+        uint256 indexed spankStaked,
+        uint256 indexed currentPeriod,
+        bool isClosed,
+        uint256 totalSpankStaked,
+        address delegateKey,
+        address bootyBase
     );
 
-    event UpdateActivityKeyEvent (
+    event UpdateDelegateKeyEvent (
         address indexed staker,
-        address indexed newActivityKey,
-        uint indexed currentPeriod
+        address indexed newDelegateKey,
+        uint256 indexed currentPeriod,
+        address delegateKey,
+        address bootyBase
     );
 
     event UpdateBootyBaseEvent (
         address indexed staker,
         address indexed newBootyBase,
-        uint indexed currentPeriod
+        uint256 indexed currentPeriod,
+        address delegateKey,
+        address bootyBase
+    );
+
+    event ReceiveApprovalEvent (
+        address from, 
+        uint256 amount,
+        address tokenContract, 
+        bytes extraData
     );
 
     /***********************************
@@ -83,14 +110,12 @@ contract SpankBank {
     uint256 public periodLength; // time length of each period in seconds
     uint256 public maxPeriods;
     uint256 public totalSpankStaked;
-    uint256 public unwindVotes;
-    uint256 public unwindPeriod;
-    bool public unwind;
+    bool public isClosed;
 
     // ERC-20 BASED TOKEN WITH SOME ADDED PROPERTIES FOR HUMAN READABILITY
     // https://github.com/ConsenSys/Tokens/blob/master/contracts/HumanStandardToken.sol
     HumanStandardToken public spankToken;
-    MintableToken public bootyToken;
+    MintAndBurnToken public bootyToken;
 
     // LOOKUP TABLE FOR SPANKPOINTS BY PERIOD
     // 1 -> 45%
@@ -110,8 +135,8 @@ contract SpankBank {
         uint256 endingPeriod; // the period after which this stake expires
         mapping(uint256 => uint256) spankPoints; // the spankPoints per period
         mapping(uint256 => bool) didClaimBooty; // true if staker claimed BOOTY for that period
-        mapping(uint256 => bool) votedToUnwind; // true if voter voted 
-        address activityKey;
+        mapping(uint256 => bool) votedToClose; // true if voter voted 
+        address delegateKey;
         address bootyBase;
     }
 
@@ -124,19 +149,21 @@ contract SpankBank {
         bool mintingComplete; // true if BOOTY has already been minted for this period
         uint256 startTime; // the starting unix timestamp in seconds
         uint256 endTime; // the ending unix timestamp in seconds
+        uint256 closingVotes; // the total votes to close this period
+        uint256 totalStakedSpank; // the total SPANK staked
     }
 
     mapping(uint256 => Period) public periods;
 
-    struct ActivityKey {
+    struct DelegateKey {
         address stakerAddress;
     }
 
-    mapping(address => ActivityKey) public activityKeys;
+    mapping(address => DelegateKey) public delegateKeys;
 
-    modifier active() {
-      require(unwind == false);
-      _;
+    modifier SpankBankIsOpen() {
+        require(isClosed == false);
+        _;
     }
 
     constructor (
@@ -148,7 +175,7 @@ contract SpankBank {
         periodLength = _periodLength;
         maxPeriods = _maxPeriods;
         spankToken = HumanStandardToken(spankAddress);
-        bootyToken = new MintableToken();
+        bootyToken = new MintAndBurnToken();
         bootyToken.mint(this, initialBootySupply);
 
         uint256 startTime = now;
@@ -175,38 +202,63 @@ contract SpankBank {
     }
 
     // Used to create a new staking position - verifies that the caller is not staking
-    function stake(uint256 spankAmount, uint256 stakePeriods, address activityKey, address bootyBase) active public {
-        updatePeriod();
+    function stakeFromPrivateKey(uint256 spankAmount, uint256 stakePeriods, address delegateKey, address bootyBase) SpankBankIsOpen public {
+        doStake(msg.sender, spankAmount, stakePeriods, delegateKey, bootyBase);
+    }
 
+    function doStake(address stakerAddress, uint256 spankAmount, uint256 stakePeriods, address delegateKey, address bootyBase) internal {
+        updatePeriod();
         require(stakePeriods > 0 && stakePeriods <= maxPeriods, "stake:: stake must be between 0 and maxPeriods"); // stake 1-12 (max) periods
         require(spankAmount > 0, "stake::spankAmount must be greater than 0"); // stake must be greater than 0
 
         // the msg.sender must not have an active staking position
         // TODO checking that endingPeriod == 0 should cover all periods
-        require(stakers[msg.sender].startingPeriod == 0 && stakers[msg.sender].endingPeriod == 0, "stake::startingPeriod and endingPeriod must be 0");
+        require(stakers[stakerAddress].startingPeriod == 0 && stakers[stakerAddress].endingPeriod == 0, "stake::startingPeriod and endingPeriod must be 0");
 
         // transfer SPANK to this contract - assumes sender has already "allowed" the spankAmount
-        require(spankToken.transferFrom(msg.sender, this, spankAmount),"stake::spankToken transfer failure");
+        require(spankToken.transferFrom(stakerAddress, this, spankAmount),"stake::spankToken transfer failure");
 
-        // The spankAmount of spankPoints the user will have during the next staking period
-        // TODO the division is unnecessary - we're only dividing by the total
-        uint256 nextSpankPoints = SafeMath.div( SafeMath.mul(spankAmount, pointsTable[stakePeriods]), 100 );
+        stakers[stakerAddress] = Staker(spankAmount, currentPeriod + 1, currentPeriod + stakePeriods, delegateKey, bootyBase);
 
-        stakers[msg.sender] = Staker(spankAmount, currentPeriod + 1, currentPeriod + stakePeriods, activityKey, bootyBase);
-
-        stakers[msg.sender].spankPoints[currentPeriod + 1] = nextSpankPoints;
-
-        uint256 nextTotalSpankPoints = periods[currentPeriod + 1].totalSpankPoints;
-        nextTotalSpankPoints = SafeMath.add(nextTotalSpankPoints, nextSpankPoints);
-        periods[currentPeriod + 1].totalSpankPoints = nextTotalSpankPoints;
+        _calculateNextPeriodPoints(stakerAddress, stakePeriods);
 
         totalSpankStaked = SafeMath.add(totalSpankStaked, spankAmount);
 
-        ActivityKey storage newActivityKey = activityKeys[activityKey];
-        require(newActivityKey.stakerAddress == address(0));
-        newActivityKey.stakerAddress = msg.sender;
+        DelegateKey storage newDelegateKey = delegateKeys[delegateKey];
+        require(delegateKey != address(0));
+        require(bootyBase != address(0));
+        require(newDelegateKey.stakerAddress == address(0));
+        newDelegateKey.stakerAddress = stakerAddress;
 
-        emit StakeEvent(msg.sender, currentPeriod + 1, currentPeriod + stakePeriods, activityKey, bootyBase);
+        emit StakeEvent(stakerAddress, stakePeriods, currentPeriod + 1, delegateKey, bootyBase, currentPeriod);
+    }
+
+    function _calculateNextPeriodPoints(address stakerAddress, uint256 stakingPeriods) internal {
+        Staker storage staker = stakers[stakerAddress];
+        uint256 nextSpankPoints = SafeMath.div(SafeMath.mul(staker.spankStaked, pointsTable[stakingPeriods]), 100);
+        uint256 stakerNextPeriodSpankPoints = staker.spankPoints[currentPeriod + 1];
+
+        if (stakerNextPeriodSpankPoints == 0) {
+            uint256 nextTotalSpankPoints = periods[currentPeriod + 1].totalSpankPoints;
+            nextTotalSpankPoints = SafeMath.add(nextTotalSpankPoints, nextSpankPoints);
+            periods[currentPeriod + 1].totalSpankPoints = nextTotalSpankPoints;
+        }
+
+        staker.spankPoints[currentPeriod + 1] = nextSpankPoints;
+
+        Period storage period = periods[currentPeriod];
+        period.totalStakedSpank = SafeMath.add(period.totalStakedSpank, staker.spankStaked);
+    }
+
+    function receiveApproval(address from, uint256 amount, address tokenContract, bytes extraData) public returns (bool success) {
+        uint256 periodFromBytes = extraData.toUint(97);
+        address delegateKeyFromBytes = extraData.toAddress(130);
+        address bootyBaseFromBytes = extraData.toAddress(151);
+
+        emit ReceiveApprovalEvent(from, amount, tokenContract, extraData);
+        
+        doStake(from, amount, periodFromBytes, delegateKeyFromBytes, bootyBaseFromBytes);
+        return true;
     }
 
     function getSpankPoints(address stakerAddress, uint256 period) public view returns (uint256)  {
@@ -215,6 +267,19 @@ contract SpankBank {
 
     function getDidClaimBooty(address stakerAddress, uint256 period) public view returns (bool)  {
         return stakers[stakerAddress].didClaimBooty[period];
+    }
+
+    function getPeriod(uint256 period) public view returns (uint256, uint256, uint256, bool, uint256, uint256) {
+        return (periods[period].bootyFees, periods[period].totalSpankPoints, periods[period].bootyMinted, periods[period].mintingComplete, periods[period].startTime, periods[period].endTime);
+    }
+
+    function getStaker(address stakerAddress) public view returns (uint256, uint256, uint256, address, address) {
+        Staker memory staker = stakers[stakerAddress];
+        return (staker.spankStaked, staker.startingPeriod, staker.endingPeriod, staker.delegateKey, staker.bootyBase);
+    }
+
+    function getStakerFromDelegateKey(address delegateAddress) public view returns (address) {
+        return delegateKeys[delegateAddress].stakerAddress;
     }
 
     // user will be able to add more SPANK to their stake and / or extend it
@@ -229,7 +294,7 @@ contract SpankBank {
     // Does the minting depends on current stake or next?
     // If I start staking at 10.5, my stake will only matter for 11, and the BOOTY generated after 11 will be based on the fees paid during 11, and can only be collected after 11 is done
 
-    function sendFees(uint256 bootyAmount) active public {
+    function sendFees(uint256 bootyAmount) SpankBankIsOpen public {
         updatePeriod();
 
         require(bootyAmount > 0, "sendFees::fees must be greater than 0"); // fees must be greater than 0
@@ -241,10 +306,10 @@ contract SpankBank {
         currentBootyFees = SafeMath.add(bootyAmount, currentBootyFees);
         periods[currentPeriod].bootyFees = currentBootyFees;
 
-        emit SendFeesEvent(msg.sender, bootyAmount, currentBootyFees);
+        emit SendFeesEvent(msg.sender, bootyAmount, currentBootyFees, currentPeriod);
     }
 
-    function mintBooty() active public {
+    function mintBooty() SpankBankIsOpen public {
         updatePeriod();
 
         Period storage period = periods[currentPeriod - 1];
@@ -259,6 +324,7 @@ contract SpankBank {
             uint256 bootyMinted = targetBootySupply - totalBootySupply;
             bootyToken.mint(this, bootyMinted);
             period.bootyMinted = bootyMinted;
+            emit MintBootyEvent(targetBootySupply, totalBootySupply, currentPeriod);
         }
     }
 
@@ -278,10 +344,10 @@ contract SpankBank {
 
     // In order to receive Booty, each staker will have to check-in every period.
     // This check-in will compute the spankPoints locally and globally for each staker.
-    function checkIn(uint256 updatedEndingPeriod) active public {
+    function checkIn(uint256 updatedEndingPeriod) SpankBankIsOpen public {
         updatePeriod();
 
-        address stakerAddress =  activityKeys[msg.sender].stakerAddress;
+        address stakerAddress =  delegateKeys[msg.sender].stakerAddress;
 
         Staker storage staker = stakers[stakerAddress];
 
@@ -299,18 +365,9 @@ contract SpankBank {
 
         uint256 stakePeriods = staker.endingPeriod - currentPeriod;
 
-        // TODO combine this and the code from stake into their own function to reduce dup
-
-        // The spankAmount of spankPoints the user will have during the next staking period
-        uint256 nextSpankPoints = SafeMath.div(SafeMath.mul(staker.spankStaked, pointsTable[stakePeriods]), 100);
-
-        staker.spankPoints[currentPeriod + 1] = nextSpankPoints;
-
-        uint256 nextTotalSpankPoints = periods[currentPeriod + 1].totalSpankPoints;
-        nextTotalSpankPoints = SafeMath.add(nextTotalSpankPoints, nextSpankPoints);
-        periods[currentPeriod + 1].totalSpankPoints = nextTotalSpankPoints;
-
-        emit CheckInEvent(stakerAddress, updatedEndingPeriod, currentPeriod);
+        _calculateNextPeriodPoints(stakerAddress, stakePeriods);
+        
+        emit CheckInEvent(stakerAddress, updatedEndingPeriod, currentPeriod, staker.delegateKey, staker.bootyBase);
     }
 
     function claimBooty(uint256 _period) public {
@@ -318,7 +375,7 @@ contract SpankBank {
 
         require(_period < currentPeriod, "claimBooty::_period must be less than currentPeriod"); // can only claim booty for previous periods
 
-        address stakerAddress =  activityKeys[msg.sender].stakerAddress;
+        address stakerAddress =  delegateKeys[msg.sender].stakerAddress;
 
         Staker storage staker = stakers[stakerAddress];
 
@@ -327,10 +384,10 @@ contract SpankBank {
         staker.didClaimBooty[_period] = true;
 
         Period memory period = periods[_period];
+        require(period.mintingComplete);
+        
         uint256 bootyMinted = period.bootyMinted;
         uint256 totalSpankPoints = period.totalSpankPoints;
-
-        require(period.mintingComplete);
 
         if (totalSpankPoints > 0) {
             uint256 stakerSpankPoints = staker.spankPoints[_period];
@@ -338,28 +395,32 @@ contract SpankBank {
 
           require(bootyToken.transfer(staker.bootyBase, bootyOwed), "claimBooty::bootyToken transfer failure");
 
-          emit ClaimBootyEvent(stakerAddress, _period, bootyOwed, stakerSpankPoints);
+          emit ClaimBootyEvent(stakerAddress, _period, bootyOwed, stakerSpankPoints, currentPeriod, staker.delegateKey, staker.bootyBase);
         }
     }
 
     function withdrawStake() public {
         updatePeriod();
 
-        address stakerAddress =  activityKeys[msg.sender].stakerAddress;
+        Staker storage staker = stakers[msg.sender];
 
-        Staker storage staker = stakers[stakerAddress];
+        if (isClosed) {
+            staker.endingPeriod = SafeMath.add(currentPeriod, 1);
+        }
 
         require(currentPeriod > staker.endingPeriod, "withdrawStake::currentPeriod must be greater than staker.endingPeriod");
 
-        spankToken.transfer(stakerAddress, staker.spankStaked);
+        spankToken.transfer(msg.sender, staker.spankStaked);
+
+        uint256 totalSpankToWithdraw = staker.spankStaked;
 
         totalSpankStaked = SafeMath.sub(totalSpankStaked, staker.spankStaked);
         staker.spankStaked = 0;
 
-        emit WithdrawStakeEvent(stakerAddress, totalSpankStaked, currentPeriod);
+        emit WithdrawStakeEvent(msg.sender, totalSpankToWithdraw, currentPeriod, totalSpankStaked, staker.delegateKey, staker.bootyBase);
     }
 
-    function splitStake(address newAddress, address newActivityKey, address newBootyBase, uint256 spankAmount) public {
+    function splitStake(address newAddress, address newDelegateKey, address newBootyBase, uint256 spankAmount) public {
         updatePeriod();
 
         require(newAddress != address(0), "splitStake::newAddress must be a non-zero address");
@@ -370,57 +431,45 @@ contract SpankBank {
         require(spankAmount <= staker.spankStaked, "spankAmount must be less than or equal to staker.spankStaked");
         staker.spankStaked = SafeMath.sub(staker.spankStaked, spankAmount);
 
-        stakers[newAddress] = Staker(spankAmount, staker.startingPeriod, staker.endingPeriod, newActivityKey, newBootyBase);
+        stakers[newAddress] = Staker(spankAmount, staker.startingPeriod, staker.endingPeriod, newDelegateKey, newBootyBase);
 
-        ActivityKey storage splitActivityKey = activityKeys[newActivityKey];
-        splitActivityKey.stakerAddress = newAddress;
+        DelegateKey storage splitDelegateKey = delegateKeys[newDelegateKey];
+        splitDelegateKey.stakerAddress = newAddress;
 
-        emit SplitStakeEvent(msg.sender, newAddress, spankAmount, currentPeriod, staker.startingPeriod, staker.endingPeriod, newActivityKey, newBootyBase);
+        emit SplitStakeEvent(msg.sender, newAddress, spankAmount, currentPeriod, staker.startingPeriod, staker.endingPeriod, newDelegateKey, newBootyBase,staker.delegateKey, staker.bootyBase);
     }
 
-    function voteToUnwind() public {
+    function voteToClose() public {
         updatePeriod();
 
-        require(unwind == false);
-
-        address stakerAddress = activityKeys[msg.sender].stakerAddress;
-        require(stakerAddress != address(0));
-
-        Staker storage staker = stakers[stakerAddress];
+        Staker storage staker = stakers[msg.sender];
         require(staker.spankStaked > 0);
-        require(staker.endingPeriod >= currentPeriod);
-        
+        require(staker.endingPeriod >= currentPeriod);        
+        require (staker.votedToClose[currentPeriod] == false);
+        require(isClosed == false);
 
-        if (unwindPeriod != currentPeriod) {
-            unwindPeriod = currentPeriod;
-            unwindVotes = 0;
-            staker.votedToUnwind[currentPeriod] = false;
-        }
-        
-        require (staker.votedToUnwind[currentPeriod] == false);
-        staker.votedToUnwind[currentPeriod] = true;
-        unwindVotes = SafeMath.add(unwindVotes, staker.spankStaked);
+        staker.votedToClose[currentPeriod] = true;
 
-        uint256 unwindTrigger = SafeMath.div(totalSpankStaked, 2);
-        if (unwindVotes > unwindTrigger) {
-            unwind = true;
+        uint256 closingTrigger = SafeMath.div(totalSpankStaked, 2);
+        if (totalSpankStaked > closingTrigger) {
+            isClosed = true;
         }
 
-        emit VoteToUnwindEvent(stakerAddress, staker.spankStaked, unwind, currentPeriod, totalSpankStaked);
+        emit VoteToCloseEvent(msg.sender, staker.spankStaked, currentPeriod, isClosed, totalSpankStaked, staker.delegateKey, staker.bootyBase);
     }
 
-    function updateActivityKey(address newActivityKey) public {
+    function updateDelegateKey(address newDelegateKey) public {
         Staker storage staker = stakers[msg.sender];
-        require (staker.activityKey != address(0));
-        staker.activityKey = newActivityKey;
+        require (staker.delegateKey != address(0));
+        staker.delegateKey = newDelegateKey;
         
-        ActivityKey storage oldActivityKey = activityKeys[staker.activityKey];
-        oldActivityKey.stakerAddress = address(0);
+        DelegateKey storage oldDelegateKey = delegateKeys[staker.delegateKey];
+        oldDelegateKey.stakerAddress = address(0);
 
-        ActivityKey storage activityKey = activityKeys[newActivityKey];
-        activityKey.stakerAddress = msg.sender;
+        DelegateKey storage delegateKey = delegateKeys[newDelegateKey];
+        delegateKey.stakerAddress = msg.sender;
 
-        emit UpdateActivityKeyEvent(msg.sender, newActivityKey, currentPeriod);
+        emit UpdateDelegateKeyEvent(msg.sender, newDelegateKey, currentPeriod, staker.delegateKey, staker.bootyBase);
     }
 
     function updateBootyBase(address newBootyBase) public {
@@ -429,7 +478,7 @@ contract SpankBank {
 
         staker.bootyBase = newBootyBase;
 
-        emit UpdateBootyBaseEvent(msg.sender, newBootyBase, currentPeriod);
+        emit UpdateBootyBaseEvent(msg.sender, newBootyBase, currentPeriod, staker.delegateKey, staker.bootyBase);
     }
 
     // TODO as-is, the contract doesnt allow for dynamic stake allocation - you can only extend
