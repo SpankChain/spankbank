@@ -6,6 +6,7 @@ import "./BytesLib.sol";
 
 contract SpankBank {
     using BytesLib for bytes;
+    using SafeMath for uint256;
 
     event StakeEvent(
         address indexed staker,
@@ -54,20 +55,17 @@ contract SpankBank {
         uint256 totalSpankStaked,
         address delegateKey,
         address bootyBase
-        
     );
 
     event SplitStakeEvent (
         address indexed staker,
         address indexed newAddress,
-        uint256 indexed spankAmount,
-        uint256 currentPeriod,
-        uint256 startingPeriod,
-        uint256 endingPeriod,
-        address splitDelegateKey,
-        address splitbootyBase,
-        address delegateKey,
-        address bootyBase
+        address indexed newDelegateKey,
+        address newBootyBase,
+        uint spankAmount,
+        uint currentPeriod,
+        uint startingPeriod,
+        uint endingPeriod
     );
 
     event VoteToCloseEvent (
@@ -111,6 +109,8 @@ contract SpankBank {
     uint256 public maxPeriods;
     uint256 public totalSpankStaked;
     bool public isClosed;
+    uint256 public closingVotes;
+    uint256 public closingPeriod;
 
     // ERC-20 BASED TOKEN WITH SOME ADDED PROPERTIES FOR HUMAN READABILITY
     // https://github.com/ConsenSys/Tokens/blob/master/contracts/HumanStandardToken.sol
@@ -267,6 +267,10 @@ contract SpankBank {
 
     function getDidClaimBooty(address stakerAddress, uint256 period) public view returns (bool)  {
         return stakers[stakerAddress].didClaimBooty[period];
+    }
+
+    function getVote(address stakerAddress, uint period) public view returns (bool) {
+        return stakers[stakerAddress].votedToClose[period];
     }
 
     function getPeriod(uint256 period) public view returns (uint256, uint256, uint256, bool, uint256, uint256) {
@@ -427,31 +431,37 @@ contract SpankBank {
         require(spankAmount > 0, "splitStake::spankAmount must be greater than 0");
 
         Staker storage staker = stakers[msg.sender];
-        require(currentPeriod < staker.endingPeriod, "currentPeriod must be less than staker.endingPeriod");
-        require(spankAmount <= staker.spankStaked, "spankAmount must be less than or equal to staker.spankStaked");
-        staker.spankStaked = SafeMath.sub(staker.spankStaked, spankAmount);
+        require(currentPeriod < staker.endingPeriod, "currentPeriod must be less than staker endingPeriod");
+        require(spankAmount <= staker.spankStaked, "spankAmount must be less than or equal to staker stake");
+
+        staker.spankStaked = staker.spankStaked.sub(spankAmount);
 
         stakers[newAddress] = Staker(spankAmount, staker.startingPeriod, staker.endingPeriod, newDelegateKey, newBootyBase);
 
         DelegateKey storage splitDelegateKey = delegateKeys[newDelegateKey];
         splitDelegateKey.stakerAddress = newAddress;
 
-        emit SplitStakeEvent(msg.sender, newAddress, spankAmount, currentPeriod, staker.startingPeriod, staker.endingPeriod, newDelegateKey, newBootyBase,staker.delegateKey, staker.bootyBase);
+        emit SplitStakeEvent(msg.sender, newAddress, newDelegateKey, newBootyBase, spankAmount, currentPeriod, staker.startingPeriod, staker.endingPeriod);
     }
 
     function voteToClose() public {
         updatePeriod();
 
         Staker storage staker = stakers[msg.sender];
-        require(staker.spankStaked > 0);
-        require(staker.endingPeriod >= currentPeriod);        
+        require(staker.spankStaked > 0, "stake must be greater than zero");
+        require(staker.endingPeriod >= currentPeriod, "endingPeriod must be greater than or equal to currentPeriod");        
         require (staker.votedToClose[currentPeriod] == false);
         require(isClosed == false);
 
+        if (closingPeriod != currentPeriod) {
+            closingPeriod = currentPeriod;
+            closingVotes = 0;
+        }
+        closingVotes = SafeMath.add(closingVotes, staker.spankStaked);
         staker.votedToClose[currentPeriod] = true;
 
         uint256 closingTrigger = SafeMath.div(totalSpankStaked, 2);
-        if (totalSpankStaked > closingTrigger) {
+        if (closingVotes > closingTrigger) {
             isClosed = true;
         }
 
@@ -459,6 +469,9 @@ contract SpankBank {
     }
 
     function updateDelegateKey(address newDelegateKey) public {
+        require (newDelegateKey != address(0));
+        require (delegateKeys[newDelegateKey].stakerAddress == address(0));
+
         Staker storage staker = stakers[msg.sender];
         require (staker.delegateKey != address(0));
         staker.delegateKey = newDelegateKey;
