@@ -202,7 +202,7 @@ contract SpankBank {
     }
 
     // Used to create a new staking position - verifies that the caller is not staking
-    function stakeFromPrivateKey(uint256 spankAmount, uint256 stakePeriods, address delegateKey, address bootyBase) SpankBankIsOpen public {
+    function stake(uint256 spankAmount, uint256 stakePeriods, address delegateKey, address bootyBase) SpankBankIsOpen public {
         doStake(msg.sender, spankAmount, stakePeriods, delegateKey, bootyBase);
     }
 
