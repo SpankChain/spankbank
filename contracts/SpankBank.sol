@@ -202,7 +202,7 @@ contract SpankBank {
     }
 
     // Used to create a new staking position - verifies that the caller is not staking
-    function stakeFromPrivateKey(uint256 spankAmount, uint256 stakePeriods, address delegateKey, address bootyBase) SpankBankIsOpen public {
+    function stake(uint256 spankAmount, uint256 stakePeriods, address delegateKey, address bootyBase) SpankBankIsOpen public {
         doStake(msg.sender, spankAmount, stakePeriods, delegateKey, bootyBase);
     }
 
@@ -251,10 +251,10 @@ contract SpankBank {
     }
 
     function receiveApproval(address from, uint256 amount, address tokenContract, bytes extraData) public returns (bool success) {
-        uint256 periodFromBytes = extraData.toUint(97);
-        address delegateKeyFromBytes = extraData.toAddress(130);
-        address bootyBaseFromBytes = extraData.toAddress(151);
-
+        address delegateKeyFromBytes = extraData.toAddress(12);
+        address bootyBaseFromBytes = extraData.toAddress(44);
+        uint256 periodFromBytes = extraData.toUint(64);
+        
         emit ReceiveApprovalEvent(from, amount, tokenContract, extraData);
         
         doStake(from, amount, periodFromBytes, delegateKeyFromBytes, bootyBaseFromBytes);

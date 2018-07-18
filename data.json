@@ -1,6 +1,6 @@
 {
     "token": {
-        "totalSupply" : 1000000000,
+        "totalSupply" : 1000000000000000000000000000,
         "name": "SPANK",
         "decimals": 18,
         "symbol": "SPANK"
