@@ -6,7 +6,7 @@
         "symbol": "SPANK"
     },
     "spankbank": {
-        "periodLength": 2592000,
+        "periodLength": 3600,
         "initialBootySupply": 1000000000000000000000000000,
         "maxPeriods": 12
     }
