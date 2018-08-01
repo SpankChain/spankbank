@@ -170,12 +170,15 @@ contract SpankBank {
         uint256 _periodLength,
         uint256 _maxPeriods,
         address spankAddress,
-        uint256 initialBootySupply
+        uint256 initialBootySupply,
+        string bootyTokenName,
+        uint8 bootyDecimalUnits,
+        string bootySymbol
     )   public {
         periodLength = _periodLength;
         maxPeriods = _maxPeriods;
         spankToken = HumanStandardToken(spankAddress);
-        bootyToken = new MintAndBurnToken();
+        bootyToken = new MintAndBurnToken(bootyTokenName, bootyDecimalUnits, bootySymbol);
         bootyToken.mint(this, initialBootySupply);
 
         uint256 startTime = now;
