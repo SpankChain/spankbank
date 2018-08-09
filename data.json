@@ -9,5 +9,10 @@
         "periodLength": 2592000,
         "initialBootySupply": 1000000000000000000000000000,
         "maxPeriods": 12
+    },
+    "booty": {
+        "name": "BOOTY",
+        "decimals": 18,
+        "symbol": "BOOTY"
     }
 }
