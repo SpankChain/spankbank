@@ -34,9 +34,17 @@ async function blockTime() {
 }
 
 async function moveForwardPeriods(periods) {
+  const blocktimestamp = await blockTime()
   const goToTime = data.spankbank.periodLength * periods
-  await ethRPC.sendAsync({jsonrpc:'2.0', method: `evm_increaseTime`, params: [goToTime]}, (err)=> {`error increasing time`});
-  return await ethRPC.sendAsync({method: `evm_mine`}, (err)=> {assert.equal(err, null, `error force mining`)});
+  await ethRPC.sendAsync({
+    jsonrpc:'2.0', method: `evm_increaseTime`, 
+    params: [goToTime],
+    id: 0
+  }, (err)=> {`error increasing time`});
+  await forceMine()
+  const updatedBlocktimestamp = await blockTime()
+  console.log('\t(moveForwardPeriods)')
+  return true
 }
 
 async function getStaker(address) {
@@ -54,13 +62,10 @@ async function didStake(address, currentPeriod) {
   return true
 }
 
-function validateSplitStakeEvent(currentPeriod, amount, staker, splitStaker, ev) {
+function validateSplitStakeEvent(amount, staker, splitStaker, ev) {
   ev.staker.should.be.equal(staker.address)
   ev.newAddress.should.be.equal(splitStaker.address)
   ev.spankAmount.should.be.bignumber.equal(amount)
-  ev.currentPeriod.should.be.bignumber.equal(parseInt(currentPeriod))
-  ev.startingPeriod.should.be.bignumber.equal(staker.startingPeriod)
-  ev.endingPeriod.should.be.bignumber.equal(staker.endingPeriod)
   return true
 }
 
@@ -108,9 +113,15 @@ function multiSigStake(spankAmount, stakePeriods, delegateKey, bootyBase) {
   return '0x40809acd' + decToBytes(spankAmount) + decToBytes(stakePeriods) + addrToBytes(delegateKey) + addrToBytes(bootyBase)
 }
 
-contract('SpankBank::stake', (accounts) => {
-  before('deploy', async () => {    
+contract('SpankBank::snapshot', (accounts) => {
+  it('take snapshot', async () => {
     await snapshot()
+  })
+})
+
+contract('SpankBank::stake', (accounts) => {
+  before('deploy', async () => {
+    await restore() 
     spankbank = await SpankBank.deployed()
     spankToken = await SpankToken.deployed()
     bootyAddress = await spankbank.bootyToken()
@@ -478,7 +489,7 @@ contract('SpankBank::checkIn', (accounts) => {
     await spankbank.stake(expiredStaker.stake, expiredStaker.periods, expiredStaker.address, expiredStaker.address, {from : expiredStaker.address})
   })
 
-  describe('checking in has three requirements\n\t1. updated ending period is greater than the current period\n\t2. updated ending period is greater than the staker ending period\n\t3. the updated ending period is less than or equal to the max number of allowed periods starting from the current period', () => {
+  describe('checking in has three requirements\n\t1. updated ending period is greater than the current period\n\t2. updated ending period is greater than the staker ending period\n\t3. the updated ending period is less than or equal to the max number of allowed periods starting from the current period\n\t4. staker spankpoints for next period is zero', () => {
 
     /*
     test require failure for updatedEndingPeriod > currentPeriod and verify passing of requires :
@@ -489,12 +500,28 @@ contract('SpankBank::checkIn', (accounts) => {
     checkin   current   staker end
     */
     it('1. current period not greater than updated ending period', async () => {  
+      await spankbank.updatePeriod() // interacting with contract before moving foward
       await moveForwardPeriods(3)
       await spankbank.updatePeriod()
-      currentPeriod = await spankbank.currentPeriod()
+      currentPeriod = parseInt(await spankbank.currentPeriod())
+      //console.log('\tcurrentPeriod', currentPeriod)
       faultyCheckInPeriod = parseInt(currentPeriod) - 1
       expiredBankedStaker = await getStaker(expiredStaker.address)
       
+      spankPoints = await spankbank.getSpankPoints(expiredStaker.address, currentPeriod + 1)
+      spankPoints.should.be.bignumber.equal(0)
+      // error below occurs because blockchain does not reliably move forward
+      // solution is to interact with contract before moving foward (line 495)
+      /*
+      AssertionError: expected '100' to equal '0'
+      + expected - actual
+
+      -100
+      +0
+
+      at Context.it (test/spank.js:503:39)
+      */
+
       expiredBankedStaker.endingPeriod.should.be.bignumber.above( currentPeriod )
       expect(faultyCheckInPeriod).to.be.below(parseInt(currentPeriod) + maxPeriods)
       await spankbank.checkIn(faultyCheckInPeriod, {from: expiredStaker.address}).should.be.rejectedWith(SolRevert)
@@ -515,6 +542,9 @@ contract('SpankBank::checkIn', (accounts) => {
       checkInPeriod = parseInt(currentPeriod) + 1
       expiredBankedStaker = await getStaker(expiredStaker.address)
       
+      spankPoints = await spankbank.getSpankPoints(expiredStaker.address, currentPeriod+1)
+      spankPoints.should.be.bignumber.equal(0)
+
       expect(checkInPeriod).to.be.above( parseInt(currentPeriod) )
       expiredBankedStaker.endingPeriod.should.be.bignumber.above( checkInPeriod )
       expect(checkInPeriod).to.be.below(parseInt(currentPeriod) + maxPeriods)
@@ -532,6 +562,9 @@ contract('SpankBank::checkIn', (accounts) => {
     it('3. updated ending period greater than current period + max period', async () => {  
       currentPeriod = await spankbank.currentPeriod()
       expiredBankedStaker = await getStaker(expiredStaker.address)
+
+      spankPoints = await spankbank.getSpankPoints(expiredStaker.address, currentPeriod+1)
+      spankPoints.should.be.bignumber.equal(0)
 
       checkInPeriod = parseInt(expiredBankedStaker.endingPeriod) + maxPeriods + 1
       currentPeriod.should.be.bignumber.below( checkInPeriod )
@@ -551,6 +584,12 @@ contract('SpankBank::checkIn', (accounts) => {
       checkInPeriod.should.not.be.above( parseInt(currentPeriod) + maxPeriods )
 
       await spankbank.checkIn(checkInPeriod, {from: expiredStaker.address})
+    })
+
+    it('4. staker spankpoints for next period is zero', async() => {
+      currentPeriod = parseInt(await spankbank.currentPeriod())
+      spankPoints = await spankbank.getSpankPoints(expiredStaker.address, currentPeriod+1)
+      await spankbank.checkIn(checkInPeriod, {from: expiredStaker.address}).should.be.rejectedWith(SolRevert)
     })
   })
 })
@@ -580,7 +619,7 @@ contract('SpankBank::claimBooty', (accounts) => {
     await spankToken.approve(spankbank.address, staker.stake, {from: staker.address})
     
     alreadyClaimedStaker = {
-      address : accounts[4],
+      address : accounts[5],
       stake : 100,
       periods : 12
     }
@@ -644,6 +683,10 @@ contract('SpankBank::claimBooty', (accounts) => {
 
     it('2. staker alraedy claimed booty for period', async () => {   
       await spankbank.stake(alreadyClaimedStaker.stake, alreadyClaimedStaker.periods, alreadyClaimedStaker.address, alreadyClaimedStaker.address, {from : alreadyClaimedStaker.address})
+      
+      await moveForwardPeriods(1)
+      await spankbank.updatePeriod()
+      await spankbank.mintBooty()
 
       currentPeriod = await spankbank.currentPeriod()
       perviousPeriod = parseInt(currentPeriod) - 1
@@ -652,15 +695,15 @@ contract('SpankBank::claimBooty', (accounts) => {
       perviousPeriodData = await getPeriod(currentPeriod-1)
       expect(perviousPeriod).to.be.below(parseInt(currentPeriod)) // 1. pass
       
-      afterClaimBooty = await spankbank.getDidClaimBooty(alreadyClaimedStaker.address, parseInt(perviousPeriod))
-      expect(afterClaimBooty).to.be.true // 2. fail
+      afterClaimBooty = await spankbank.getDidClaimBooty(alreadyClaimedStaker.address, perviousPeriod)
+      expect(afterClaimBooty).to.be.true 
 
       expect(perviousPeriodData.mintingComplete).to.be.true //3. pass
       
       bootyTotal = await bootyToken.balanceOf.call(spankbank.address)
       bootyTotal.should.be.bignumber.above(0) // 4. pass
 
-      await spankbank.claimBooty(perviousPeriod, {from: alreadyClaimedStaker.address}).should.be.rejectedWith(SolRevert)
+      await spankbank.claimBooty(perviousPeriod, {from: alreadyClaimedStaker.address}).should.be.rejectedWith(SolRevert) // 2. fail
     })
 
     it('3. did not mint for the period', async () => {   
@@ -685,15 +728,17 @@ contract('SpankBank::claimBooty', (accounts) => {
     })
 
     it('SUCCESS!', async () => {
+      await spankbank.updatePeriod()
       await spankbank.mintBooty()
+      
+      await spankbank.stake(claimStaker.stake, claimStaker.periods, claimStaker.address, claimStaker.address, {from : claimStaker.address})
+
       await moveForwardPeriods(1)
       await spankbank.mintBooty()
       await spankbank.updatePeriod()
 
-      await spankbank.stake(claimStaker.stake, claimStaker.periods, claimStaker.address, claimStaker.address, {from : claimStaker.address})
-
       currentPeriod = await spankbank.currentPeriod()
-      perviousPeriodData = await getPeriod(parseInt(currentPeriod)-1)
+      perviousPeriodData = await getPeriod(parseInt(currentPeriod) - 1)
 
       expect(perviousPeriod).to.be.below(parseInt(currentPeriod)) // 1. pass
 
@@ -704,6 +749,7 @@ contract('SpankBank::claimBooty', (accounts) => {
       bootyTotal = await bootyToken.balanceOf.call(spankbank.address)
       bootyTotal.should.be.bignumber.above(0) // 4. pass
       
+      currentPeriod = await spankbank.currentPeriod()
       await spankbank.claimBooty(parseInt(currentPeriod) - 1, {from: claimStaker.address})
     })
   })
@@ -742,6 +788,16 @@ contract('SpankBank::splitStake', (accounts) => {
     await spankToken.approve(spankbank.address, splitStaker.stake, {from: splitStaker.address})
     await spankbank.stake(splitStaker.stake, splitStaker.periods, splitStaker.address, splitStaker.address, {from : splitStaker.address})
 
+    checkedInStaker = {
+      address : accounts[5],
+      stake : 100,
+      periods : 12
+    }
+
+    await spankToken.transfer(checkedInStaker.address, checkedInStaker.stake, {from: staker.address})
+    await spankToken.approve(spankbank.address, checkedInStaker.stake, {from: checkedInStaker.address})
+    await spankbank.stake(checkedInStaker.stake, checkedInStaker.periods, checkedInStaker.address, checkedInStaker.address, {from : checkedInStaker.address})
+
     successStaker = {
       address : accounts[9],
       stake : 100,
@@ -750,9 +806,10 @@ contract('SpankBank::splitStake', (accounts) => {
 
     await spankToken.transfer(successStaker.address, successStaker.stake, {from: staker.address})
     await spankToken.approve(spankbank.address, successStaker.stake, {from: successStaker.address})
+    await spankbank.stake(successStaker.stake, successStaker.periods, successStaker.address, successStaker.address, {from : successStaker.address})
   })
 
-  describe('splitStake has four requirements\n\t1. the address to split is not address(0)\n\t2. the stake amount to be split is greater than zero\n\t3. the current period is less than the stakers ending period\n\t4. the amount to be split is less than or equal to staker\'s staker', () => {
+  describe('splitStake has five requirements\n\t1. the address to split is not address(0)\n\t2. the stake amount to be split is greater than zero\n\t3. the current period is less than the stakers ending period\n\t4. the amount to be split is less than or equal to staker\'s staker\n\t5. the staker has no spank points for current period (has not yet checked in', () => {
     /*
     1. new address must be non-zero
     2. split amount must be greater than zero
@@ -768,6 +825,9 @@ contract('SpankBank::splitStake', (accounts) => {
       bankedStaker.stake.should.be.bignumber.not.below(splitAmount) // 3. pass
       bankedStaker.endingPeriod.should.be.bignumber.above( await spankbank.currentPeriod() ) // 4. pass
 
+      spankPoints = await spankbank.getSpankPoints(staker.address,  await spankbank.currentPeriod())
+      spankPoints.should.be.bignumber.equal(0) // 5. pass
+
       await spankbank.splitStake(splitAddress, staker.address, staker.address, staker.stake, {from: staker.address}).should.be.rejectedWith(SolRevert)
     })
 
@@ -779,6 +839,9 @@ contract('SpankBank::splitStake', (accounts) => {
       expect(splitAmount).to.be.equal(0) // 2. fail
       bankedStaker.stake.should.be.bignumber.not.below(splitAmount) // 3. pass
       bankedStaker.endingPeriod.should.be.bignumber.above( await spankbank.currentPeriod() ) // 4. pass
+      
+      spankPoints = await spankbank.getSpankPoints(staker.address,  await spankbank.currentPeriod())
+      spankPoints.should.be.bignumber.equal(0) // 5. pass
 
       await spankbank.splitStake(splitAddress, staker.address, staker.address, splitAmount, {from: staker.address}).should.be.rejectedWith(SolRevert)
     })
@@ -791,6 +854,9 @@ contract('SpankBank::splitStake', (accounts) => {
       expect(splitAmount).to.be.above(0) // 2. pass
       bankedStaker.stake.should.be.bignumber.below( splitAmount ) // 3. fail
       bankedStaker.endingPeriod.should.be.bignumber.above( await spankbank.currentPeriod() ) // 4. pass
+      
+      spankPoints = await spankbank.getSpankPoints(staker.address,  await spankbank.currentPeriod())
+      spankPoints.should.be.bignumber.equal(0) // 5. pass
       
       await spankbank.splitStake(splitAddress, staker.address, staker.address, splitAmount, {from: staker.address}).should.be.rejectedWith(SolRevert)
     })
@@ -810,13 +876,49 @@ contract('SpankBank::splitStake', (accounts) => {
       bankedStaker.stake.should.not.be.bignumber.below( splitAmount ) // 3. pass
       bankedStaker.endingPeriod.should.be.bignumber.not.above( await spankbank.currentPeriod() ) // 4. fail
       
+      spankPoints = await spankbank.getSpankPoints(staker.address,  await spankbank.currentPeriod())
+      spankPoints.should.be.bignumber.equal(0) // 5. pass
+      
       await spankbank.splitStake( staker.address, staker.address, staker.address, staker.stake, {from: staker.address}).should.be.rejectedWith(SolRevert)
     })
 
-    it('SUCCESS!', async () => {
-      await spankbank.stake(successStaker.stake, successStaker.periods, successStaker.address, successStaker.address, {from : successStaker.address})
+    it('5. the staker has no spank points for current period (has not yet checked in yet)', async () => {
+      await moveForwardPeriods(1)
+      await spankbank.updatePeriod()
+      currentPeriod = parseInt(await spankbank.currentPeriod())
+
+      checkedInBankedStaker = await getStaker(checkedInStaker.address)
+      
+
       newStaker = {
-        address : accounts[7]
+        address : accounts[6]
+      }
+      splitAmount = successStaker.stake
+      bankedStaker = await getStaker(successStaker.address)
+      splitAddress = newStaker.address
+      expect(newStaker).to.not.be.equal("0x0000000000000000000000000000000000000000") // 1. pass
+      expect(splitAmount).to.be.above(0) // 2. pass
+      bankedStaker.stake.should.not.be.bignumber.below( splitAmount ) // 3. pass
+      bankedStaker.endingPeriod.should.be.bignumber.above( currentPeriod ) // 4. pass
+
+
+      await spankbank.checkIn( parseInt(checkedInBankedStaker.endingPeriod) + 1, {from: checkedInStaker.address})
+      
+      currentPeriod = parseInt(await spankbank.currentPeriod())
+      spankPoints = await spankbank.getSpankPoints(checkedInStaker.address, currentPeriod + 1)
+      spankPoints.should.be.bignumber.above(0)
+
+      newStaker = {
+        address : accounts[4]
+      }
+
+      await spankbank.splitStake(newStaker.address, newStaker.address, newStaker.address, checkedInStaker.stake, {from: checkedInStaker.address}).should.be.rejectedWith(SolRevert) // 5.fail
+    })
+    
+
+    it('SUCCESS!', async () => {
+      newStaker = {
+        address : accounts[6]
       }
       splitAmount = successStaker.stake
       bankedStaker = await getStaker(successStaker.address)
@@ -825,56 +927,7 @@ contract('SpankBank::splitStake', (accounts) => {
       expect(splitAmount).to.be.above(0) // 2. pass
       bankedStaker.stake.should.not.be.bignumber.below( splitAmount ) // 3. pass
       bankedStaker.endingPeriod.should.be.bignumber.above( await spankbank.currentPeriod() ) // 4. pass
-      
-      await spankbank.splitStake(newStaker.address, newStaker.address, newStaker.address, splitAmount, {from: successStaker.address})
-    })
-  })
-})
-
-contract('SpankBank::withdrawStake', (accounts) => {
-  before('deploy', async () => {    
-    //owner = accounts[0]
-    await restore()
-    spankbank = await SpankBank.deployed()
-    spankToken = await SpankToken.deployed()
-    bootyAddress = await spankbank.bootyToken()
-    bootyToken = await BootyToken.at(bootyAddress)
-    
-    maxPeriods = parseInt(await spankbank.maxPeriods())
-    initialPeriodData = await spankbank.periods(0)
-    startTime = parseInt(initialPeriodData[4])
-    endTime = parseInt(initialPeriodData[5])
-    periodLength = parseInt(await spankbank.periodLength())
-
-    staker = {
-      address : accounts[0],
-      stake : 100,
-      periods : 12
-    }
-
-    await spankToken.approve(spankbank.address, staker.stake, {from: staker.address})
-    await spankbank.stake(staker.stake, staker.periods, staker.address, staker.address, {from : staker.address})
-  })
-
-  describe('withdraw stake has one requirement\n\t1. current period must be greater than staker ending period', () => {
-    it('1. staking period has not ended', async () => {   
-      balance = await spankToken.balanceOf(staker.address)
-      bankedStaker = await getStaker(staker.address)
-      delegateKey = await spankbank.getStakerFromDelegateKey(staker.address)
-      await moveForwardPeriods(3)
-      await spankbank.updatePeriod()
-      bankedStaker = await getStaker(staker.address)
-
-      bankedStaker.endingPeriod.should.be.bignumber.above( await spankbank.currentPeriod() )
-      await spankbank.withdrawStake().should.be.rejectedWith(SolRevert)
-    })
-    it('SUCCESS!', async () => {
-      bankedStaker = await getStaker(staker.address)
-      await moveForwardPeriods(parseInt(bankedStaker.endingPeriod)*2)
-      await spankbank.updatePeriod()
-      currentPeriod = await spankbank.currentPeriod()
-      bankedStaker.endingPeriod.should.be.bignumber.below( currentPeriod )
-      await spankbank.withdrawStake()
+      await spankbank.splitStake(newStaker.address, newStaker.address, newStaker.address, splitAmount, {from: successStaker.address}) // 5. pass
     })
   })
 })
@@ -1035,7 +1088,7 @@ contract('SpankBank::voteToClose', (accounts) => {
     await spankbank.stake(staker.stake, staker.periods, staker.address, staker.address, {from : staker.address})
 
     zeroStaker = {
-      address : accounts[8],
+      address : accounts[6],
       stake : 100
     }
 
@@ -1080,7 +1133,7 @@ contract('SpankBank::voteToClose', (accounts) => {
 
   })
 
-  describe('votetoClose has four requires\n\t1. staker spank is greater than zero\n\t2. ending period >= current period\n\t3. staker has not already voted to close in current period\n\t4. spankbank is not closed', () => {
+  describe('votetoClose has four requires\n\t1. staker spank is greater than zero\n\t2. ending period >= current period\n\t3. staker has not already voted to close in current period\n\t4. spankbank is not closed, \n\tEX. withdraw after SpankBank is closed', () => {
     it('1. staker spank is zero', async () => {     
       bankedZeroStaker = await getStaker(zeroStaker.address)
       bankedZeroStaker.address.should.be.equal(zeroStaker.address)
@@ -1091,6 +1144,10 @@ contract('SpankBank::voteToClose', (accounts) => {
 
       expect(await didStake( splitStaker.address, await spankbank.currentPeriod() )).to.be.true
       
+      currentPeriod = await spankbank.currentPeriod()
+      await moveForwardPeriods(parseInt(currentPeriod) + 1)
+      await spankbank.updatePeriod()
+      
       stakerFromSplit = { address : accounts[5] }
       splitTx = await spankbank.splitStake(stakerFromSplit.address, stakerFromSplit.address, stakerFromSplit.address, splitStaker.stake, { from: splitStaker.address })
 
@@ -1098,7 +1155,6 @@ contract('SpankBank::voteToClose', (accounts) => {
       splitStakeEventPayload = await getEventParams(splitTx, "SplitStakeEvent")
       expect(
         await validateSplitStakeEvent ( 
-          await spankbank.currentPeriod(), 
           splitStaker.stake, 
           await getStaker(splitStaker.address), 
           await getStaker(stakerFromSplit.address), 
@@ -1116,9 +1172,9 @@ contract('SpankBank::voteToClose', (accounts) => {
     })
 
     it('2. staker ending period is less than current period', async () => {
-      await moveForwardPeriods(staker.periods + 1)
+      await moveForwardPeriods(staker.periods * 2)
       await spankbank.updatePeriod()
-      currentPeriod = await spankbank.currentPeriod()
+
       bankedStaker = await getStaker(staker.address)
       bankedStaker.address.should.be.equal(staker.address)
       bankedStaker.stake.should.be.bignumber.above(0)
@@ -1126,6 +1182,9 @@ contract('SpankBank::voteToClose', (accounts) => {
       
       expect(await spankbank.getVote(staker.address, currentPeriod)).to.be.false
       expect(await spankbank.isClosed()).to.be.false
+
+      await spankbank.updatePeriod()
+      currentPeriod = await spankbank.currentPeriod()
       bankedStaker.endingPeriod.should.be.bignumber.below(parseInt(currentPeriod))
       await spankbank.voteToClose({from : staker.address}).should.be.rejectedWith(SolRevert)
     })
@@ -1138,7 +1197,6 @@ contract('SpankBank::voteToClose', (accounts) => {
       voteToCloseTx = await spankbank.voteToClose({from : closedVoteStaker.address})
       payload = await getEventParams(voteToCloseTx, "VoteToCloseEvent")
       payload.staker.should.be.equal(closedVoteStaker.address)
-      payload.spankStaked.should.be.bignumber.equal(closedVoteStaker.stake)
 
       currentPeriod = await spankbank.currentPeriod()
       closedBankedStaker = await getStaker(closedVoteStaker.address)
@@ -1160,7 +1218,6 @@ contract('SpankBank::voteToClose', (accounts) => {
   
       votePayload = await getEventParams(voteTx, "VoteToCloseEvent")
       votePayload.staker.should.be.equal(voteBreakStaker.address)
-      votePayload.spankStaked.should.be.bignumber.equal(voteBreakStaker.stake)
 
       currentPeriod = await spankbank.currentPeriod()
       voteBreakBankedStaker = await getStaker(voteBreakStaker.address)
@@ -1170,5 +1227,73 @@ contract('SpankBank::voteToClose', (accounts) => {
 
       await spankbank.voteToClose({from : randomStaker.address}).should.be.rejectedWith(SolRevert)
     })
+    
+    it('EX. withdraw after SpankBank is closed', async () => {
+      bankedZeroStaker = await getStaker(voteBreakStaker.address)
+      await spankbank.withdrawStake({from : voteBreakStaker.address})
+    })
   })
 })
+
+contract('SpankBank::withdrawStake', (accounts) => {
+  before('deploy', async () => {    
+    await restore()
+    spankbank = await SpankBank.deployed()
+    spankToken = await SpankToken.deployed()
+    bootyAddress = await spankbank.bootyToken()
+    bootyToken = await BootyToken.at(bootyAddress)
+    
+    maxPeriods = parseInt(await spankbank.maxPeriods())
+    initialPeriodData = await spankbank.periods(0)
+    startTime = parseInt(initialPeriodData[4])
+    endTime = parseInt(initialPeriodData[5])
+    periodLength = parseInt(await spankbank.periodLength())
+
+    staker = {
+      address : accounts[0],
+      stake : 100,
+      periods : 12
+    }
+
+    await spankToken.approve(spankbank.address, staker.stake, {from: staker.address})
+    await spankbank.stake(staker.stake, staker.periods, staker.address, staker.address, {from : staker.address})
+  })
+
+  describe('withdraw stake has one requirement\n\t1. current period must be greater than staker ending period', () => {
+    it('1. staking period has not ended', async () => {   
+      balance = await spankToken.balanceOf(staker.address)
+      bankedStaker = await getStaker(staker.address)
+      delegateKey = await spankbank.getStakerFromDelegateKey(staker.address)
+      await moveForwardPeriods(3)
+      await spankbank.updatePeriod()
+      bankedStaker = await getStaker(staker.address)
+
+      bankedStaker.endingPeriod.should.be.bignumber.above( await spankbank.currentPeriod() )
+      await spankbank.withdrawStake().should.be.rejectedWith(SolRevert)
+    })
+    it('SUCCESS!', async () => {
+      await spankbank.updatePeriod() // interacting with contract before moving foward
+      await moveForwardPeriods(staker.periods + 2)
+      await spankbank.updatePeriod()
+      currentPeriod = await spankbank.currentPeriod()
+      // console.log('\tcurrentPeriod', currentPeriod)
+      bankedStaker = await getStaker(staker.address)
+      bankedStaker.endingPeriod.should.be.bignumber.below( currentPeriod )
+      // error below occurs because blockchain does not reliably move forward
+      // solution is to interact with contract before moving foward (line 1268)
+      /*
+      AssertionError: expected '12' to be less than '3'
+      + expected - actual
+
+      -12
+      +3
+
+      at Context.it (test/spank.js:1271:53)
+      at <anonymous>
+      at process._tickCallback (internal/process/next_tick.js:160:7)
+      */
+      await spankbank.withdrawStake()
+    })
+  })
+})
+
