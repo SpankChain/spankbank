@@ -11,7 +11,7 @@ import {
   DeferredEventWrapper
 } from "./typechain-runtime";
 
-export class MintableToken extends TypeChainContract {
+export class MintAndBurnToken extends TypeChainContract {
   public readonly rawWeb3Contract: any;
 
   public constructor(web3: any, address: string | BigNumber) {
@@ -32,18 +32,18 @@ export class MintableToken extends TypeChainContract {
           { name: "_value", type: "uint256" }
         ],
         name: "approve",
-        outputs: [{ name: "", type: "bool" }],
+        outputs: [{ name: "success", type: "bool" }],
         payable: false,
         stateMutability: "nonpayable",
         type: "function"
       },
       {
-        constant: false,
+        constant: true,
         inputs: [],
         name: "totalSupply",
         outputs: [{ name: "", type: "uint256" }],
         payable: false,
-        stateMutability: "nonpayable",
+        stateMutability: "view",
         type: "function"
       },
       {
@@ -54,30 +54,18 @@ export class MintableToken extends TypeChainContract {
           { name: "_value", type: "uint256" }
         ],
         name: "transferFrom",
-        outputs: [{ name: "", type: "bool" }],
+        outputs: [{ name: "success", type: "bool" }],
         payable: false,
         stateMutability: "nonpayable",
         type: "function"
       },
       {
-        constant: false,
-        inputs: [
-          { name: "_spender", type: "address" },
-          { name: "_subtractedValue", type: "uint256" }
-        ],
-        name: "decreaseApproval",
-        outputs: [{ name: "", type: "bool" }],
-        payable: false,
-        stateMutability: "nonpayable",
-        type: "function"
-      },
-      {
-        constant: false,
+        constant: true,
         inputs: [{ name: "_owner", type: "address" }],
         name: "balanceOf",
-        outputs: [{ name: "", type: "uint256" }],
+        outputs: [{ name: "balance", type: "uint256" }],
         payable: false,
-        stateMutability: "nonpayable",
+        stateMutability: "view",
         type: "function"
       },
       {
@@ -96,33 +84,21 @@ export class MintableToken extends TypeChainContract {
           { name: "_value", type: "uint256" }
         ],
         name: "transfer",
-        outputs: [{ name: "", type: "bool" }],
+        outputs: [{ name: "success", type: "bool" }],
         payable: false,
         stateMutability: "nonpayable",
         type: "function"
       },
       {
-        constant: false,
-        inputs: [
-          { name: "_spender", type: "address" },
-          { name: "_addedValue", type: "uint256" }
-        ],
-        name: "increaseApproval",
-        outputs: [{ name: "", type: "bool" }],
-        payable: false,
-        stateMutability: "nonpayable",
-        type: "function"
-      },
-      {
-        constant: false,
+        constant: true,
         inputs: [
           { name: "_owner", type: "address" },
           { name: "_spender", type: "address" }
         ],
         name: "allowance",
-        outputs: [{ name: "", type: "uint256" }],
+        outputs: [{ name: "remaining", type: "uint256" }],
         payable: false,
-        stateMutability: "nonpayable",
+        stateMutability: "view",
         type: "function"
       },
       {
@@ -165,21 +141,21 @@ export class MintableToken extends TypeChainContract {
       {
         anonymous: false,
         inputs: [
-          { indexed: true, name: "owner", type: "address" },
-          { indexed: true, name: "spender", type: "address" },
-          { indexed: false, name: "value", type: "uint256" }
+          { indexed: true, name: "_from", type: "address" },
+          { indexed: true, name: "_to", type: "address" },
+          { indexed: false, name: "_value", type: "uint256" }
         ],
-        name: "Approval",
+        name: "Transfer",
         type: "event"
       },
       {
         anonymous: false,
         inputs: [
-          { indexed: true, name: "from", type: "address" },
-          { indexed: true, name: "to", type: "address" },
-          { indexed: false, name: "value", type: "uint256" }
+          { indexed: true, name: "_owner", type: "address" },
+          { indexed: true, name: "_spender", type: "address" },
+          { indexed: false, name: "_value", type: "uint256" }
         ],
-        name: "Transfer",
+        name: "Approval",
         type: "event"
       },
       {
@@ -219,8 +195,8 @@ export class MintableToken extends TypeChainContract {
   static async createAndValidate(
     web3: any,
     address: string | BigNumber
-  ): Promise<MintableToken> {
-    const contract = new MintableToken(web3, address);
+  ): Promise<MintAndBurnToken> {
+    const contract = new MintAndBurnToken(web3, address);
     const code = await promisify(web3.eth.getCode, [address]);
 
     // in case of missing smartcontract, code can be equal to "0x0" or "0x" depending on exact web3 implementation
@@ -234,8 +210,23 @@ export class MintableToken extends TypeChainContract {
   public get mintingFinished(): Promise<boolean> {
     return promisify(this.rawWeb3Contract.mintingFinished, []);
   }
+  public get totalSupply(): Promise<BigNumber> {
+    return promisify(this.rawWeb3Contract.totalSupply, []);
+  }
   public get owner(): Promise<string> {
     return promisify(this.rawWeb3Contract.owner, []);
+  }
+  public balanceOf(_owner: BigNumber | string): Promise<BigNumber> {
+    return promisify(this.rawWeb3Contract.balanceOf, [_owner.toString()]);
+  }
+  public allowance(
+    _owner: BigNumber | string,
+    _spender: BigNumber | string
+  ): Promise<BigNumber> {
+    return promisify(this.rawWeb3Contract.allowance, [
+      _owner.toString(),
+      _spender.toString()
+    ]);
   }
 
   public approveTx(
@@ -246,9 +237,6 @@ export class MintableToken extends TypeChainContract {
       _spender.toString(),
       _value.toString()
     ]);
-  }
-  public totalSupplyTx(): DeferredTransactionWrapper<ITxParams> {
-    return new DeferredTransactionWrapper<ITxParams>(this, "totalSupply", []);
   }
   public transferFromTx(
     _from: BigNumber | string,
@@ -261,22 +249,6 @@ export class MintableToken extends TypeChainContract {
       _value.toString()
     ]);
   }
-  public decreaseApprovalTx(
-    _spender: BigNumber | string,
-    _subtractedValue: BigNumber | number
-  ): DeferredTransactionWrapper<ITxParams> {
-    return new DeferredTransactionWrapper<ITxParams>(this, "decreaseApproval", [
-      _spender.toString(),
-      _subtractedValue.toString()
-    ]);
-  }
-  public balanceOfTx(
-    _owner: BigNumber | string
-  ): DeferredTransactionWrapper<ITxParams> {
-    return new DeferredTransactionWrapper<ITxParams>(this, "balanceOf", [
-      _owner.toString()
-    ]);
-  }
   public transferTx(
     _to: BigNumber | string,
     _value: BigNumber | number
@@ -284,24 +256,6 @@ export class MintableToken extends TypeChainContract {
     return new DeferredTransactionWrapper<ITxParams>(this, "transfer", [
       _to.toString(),
       _value.toString()
-    ]);
-  }
-  public increaseApprovalTx(
-    _spender: BigNumber | string,
-    _addedValue: BigNumber | number
-  ): DeferredTransactionWrapper<ITxParams> {
-    return new DeferredTransactionWrapper<ITxParams>(this, "increaseApproval", [
-      _spender.toString(),
-      _addedValue.toString()
-    ]);
-  }
-  public allowanceTx(
-    _owner: BigNumber | string,
-    _spender: BigNumber | string
-  ): DeferredTransactionWrapper<ITxParams> {
-    return new DeferredTransactionWrapper<ITxParams>(this, "allowance", [
-      _owner.toString(),
-      _spender.toString()
     ]);
   }
   public transferOwnershipTx(
@@ -376,56 +330,56 @@ export class MintableToken extends TypeChainContract {
       }
     >(this, "OwnershipTransferred", eventFilter);
   }
-  public ApprovalEvent(eventFilter: {
-    owner?: BigNumber | string | Array<BigNumber | string>;
-    spender?: BigNumber | string | Array<BigNumber | string>;
-  }): DeferredEventWrapper<
-    {
-      owner: BigNumber | string;
-      spender: BigNumber | string;
-      value: BigNumber | number;
-    },
-    {
-      owner?: BigNumber | string | Array<BigNumber | string>;
-      spender?: BigNumber | string | Array<BigNumber | string>;
-    }
-  > {
-    return new DeferredEventWrapper<
-      {
-        owner: BigNumber | string;
-        spender: BigNumber | string;
-        value: BigNumber | number;
-      },
-      {
-        owner?: BigNumber | string | Array<BigNumber | string>;
-        spender?: BigNumber | string | Array<BigNumber | string>;
-      }
-    >(this, "Approval", eventFilter);
-  }
   public TransferEvent(eventFilter: {
-    from?: BigNumber | string | Array<BigNumber | string>;
-    to?: BigNumber | string | Array<BigNumber | string>;
+    _from?: BigNumber | string | Array<BigNumber | string>;
+    _to?: BigNumber | string | Array<BigNumber | string>;
   }): DeferredEventWrapper<
     {
-      from: BigNumber | string;
-      to: BigNumber | string;
-      value: BigNumber | number;
+      _from: BigNumber | string;
+      _to: BigNumber | string;
+      _value: BigNumber | number;
     },
     {
-      from?: BigNumber | string | Array<BigNumber | string>;
-      to?: BigNumber | string | Array<BigNumber | string>;
+      _from?: BigNumber | string | Array<BigNumber | string>;
+      _to?: BigNumber | string | Array<BigNumber | string>;
     }
   > {
     return new DeferredEventWrapper<
       {
-        from: BigNumber | string;
-        to: BigNumber | string;
-        value: BigNumber | number;
+        _from: BigNumber | string;
+        _to: BigNumber | string;
+        _value: BigNumber | number;
       },
       {
-        from?: BigNumber | string | Array<BigNumber | string>;
-        to?: BigNumber | string | Array<BigNumber | string>;
+        _from?: BigNumber | string | Array<BigNumber | string>;
+        _to?: BigNumber | string | Array<BigNumber | string>;
       }
     >(this, "Transfer", eventFilter);
+  }
+  public ApprovalEvent(eventFilter: {
+    _owner?: BigNumber | string | Array<BigNumber | string>;
+    _spender?: BigNumber | string | Array<BigNumber | string>;
+  }): DeferredEventWrapper<
+    {
+      _owner: BigNumber | string;
+      _spender: BigNumber | string;
+      _value: BigNumber | number;
+    },
+    {
+      _owner?: BigNumber | string | Array<BigNumber | string>;
+      _spender?: BigNumber | string | Array<BigNumber | string>;
+    }
+  > {
+    return new DeferredEventWrapper<
+      {
+        _owner: BigNumber | string;
+        _spender: BigNumber | string;
+        _value: BigNumber | number;
+      },
+      {
+        _owner?: BigNumber | string | Array<BigNumber | string>;
+        _spender?: BigNumber | string | Array<BigNumber | string>;
+      }
+    >(this, "Approval", eventFilter);
   }
 }
