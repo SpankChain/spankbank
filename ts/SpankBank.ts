@@ -55,6 +55,15 @@ export class SpankBank extends TypeChainContract {
       {
         constant: true,
         inputs: [{ name: "", type: "address" }],
+        name: "stakerByDelegateKey",
+        outputs: [{ name: "", type: "address" }],
+        payable: false,
+        stateMutability: "view",
+        type: "function"
+      },
+      {
+        constant: true,
+        inputs: [{ name: "", type: "address" }],
         name: "stakers",
         outputs: [
           { name: "spankStaked", type: "uint256" },
@@ -114,15 +123,6 @@ export class SpankBank extends TypeChainContract {
       },
       {
         constant: true,
-        inputs: [{ name: "", type: "address" }],
-        name: "delegateKeys",
-        outputs: [{ name: "stakerAddress", type: "address" }],
-        payable: false,
-        stateMutability: "view",
-        type: "function"
-      },
-      {
-        constant: true,
         inputs: [{ name: "", type: "uint256" }],
         name: "periods",
         outputs: [
@@ -144,7 +144,10 @@ export class SpankBank extends TypeChainContract {
           { name: "_periodLength", type: "uint256" },
           { name: "_maxPeriods", type: "uint256" },
           { name: "spankAddress", type: "address" },
-          { name: "initialBootySupply", type: "uint256" }
+          { name: "initialBootySupply", type: "uint256" },
+          { name: "bootyTokenName", type: "string" },
+          { name: "bootyDecimalUnits", type: "uint8" },
+          { name: "bootySymbol", type: "string" }
         ],
         payable: false,
         stateMutability: "nonpayable",
@@ -152,14 +155,7 @@ export class SpankBank extends TypeChainContract {
       },
       {
         anonymous: false,
-        inputs: [
-          { indexed: true, name: "staker", type: "address" },
-          { indexed: true, name: "stakePeriods", type: "uint256" },
-          { indexed: true, name: "startPeriod", type: "uint256" },
-          { indexed: false, name: "delegateKey", type: "address" },
-          { indexed: false, name: "bootyBase", type: "address" },
-          { indexed: false, name: "currentPeriod", type: "uint256" }
-        ],
+        inputs: [{ indexed: true, name: "staker", type: "address" }],
         name: "StakeEvent",
         type: "event"
       },
@@ -167,9 +163,7 @@ export class SpankBank extends TypeChainContract {
         anonymous: false,
         inputs: [
           { indexed: true, name: "sender", type: "address" },
-          { indexed: true, name: "bootyAmount", type: "uint256" },
-          { indexed: true, name: "currentBootyFees", type: "uint256" },
-          { indexed: false, name: "currentPeriod", type: "uint256" }
+          { indexed: true, name: "bootyAmount", type: "uint256" }
         ],
         name: "SendFeesEvent",
         type: "event"
@@ -178,21 +172,14 @@ export class SpankBank extends TypeChainContract {
         anonymous: false,
         inputs: [
           { indexed: true, name: "targetBootySupply", type: "uint256" },
-          { indexed: true, name: "totalBootySupply", type: "uint256" },
-          { indexed: true, name: "currentPeriod", type: "uint256" }
+          { indexed: true, name: "totalBootySupply", type: "uint256" }
         ],
         name: "MintBootyEvent",
         type: "event"
       },
       {
         anonymous: false,
-        inputs: [
-          { indexed: true, name: "staker", type: "address" },
-          { indexed: true, name: "updatedEndingPeriod", type: "uint256" },
-          { indexed: true, name: "currentPeriod", type: "uint256" },
-          { indexed: false, name: "delegateKey", type: "address" },
-          { indexed: false, name: "bootyBase", type: "address" }
-        ],
+        inputs: [{ indexed: true, name: "staker", type: "address" }],
         name: "CheckInEvent",
         type: "event"
       },
@@ -201,11 +188,7 @@ export class SpankBank extends TypeChainContract {
         inputs: [
           { indexed: true, name: "staker", type: "address" },
           { indexed: true, name: "period", type: "uint256" },
-          { indexed: true, name: "bootyOwed", type: "uint256" },
-          { indexed: false, name: "stakerSpankPoints", type: "uint256" },
-          { indexed: false, name: "currentPeriod", type: "uint256" },
-          { indexed: false, name: "delegateKey", type: "address" },
-          { indexed: false, name: "bootyBase", type: "address" }
+          { indexed: true, name: "bootyOwed", type: "uint256" }
         ],
         name: "ClaimBootyEvent",
         type: "event"
@@ -214,11 +197,7 @@ export class SpankBank extends TypeChainContract {
         anonymous: false,
         inputs: [
           { indexed: true, name: "staker", type: "address" },
-          { indexed: true, name: "totalSpankToWithdraw", type: "uint256" },
-          { indexed: true, name: "currentPeriod", type: "uint256" },
-          { indexed: false, name: "totalSpankStaked", type: "uint256" },
-          { indexed: false, name: "delegateKey", type: "address" },
-          { indexed: false, name: "bootyBase", type: "address" }
+          { indexed: true, name: "totalSpankToWithdraw", type: "uint256" }
         ],
         name: "WithdrawStakeEvent",
         type: "event"
@@ -228,51 +207,26 @@ export class SpankBank extends TypeChainContract {
         inputs: [
           { indexed: true, name: "staker", type: "address" },
           { indexed: true, name: "newAddress", type: "address" },
-          { indexed: true, name: "newDelegateKey", type: "address" },
-          { indexed: false, name: "newBootyBase", type: "address" },
-          { indexed: false, name: "spankAmount", type: "uint256" },
-          { indexed: false, name: "currentPeriod", type: "uint256" },
-          { indexed: false, name: "startingPeriod", type: "uint256" },
-          { indexed: false, name: "endingPeriod", type: "uint256" }
+          { indexed: false, name: "spankAmount", type: "uint256" }
         ],
         name: "SplitStakeEvent",
         type: "event"
       },
       {
         anonymous: false,
-        inputs: [
-          { indexed: true, name: "staker", type: "address" },
-          { indexed: true, name: "spankStaked", type: "uint256" },
-          { indexed: true, name: "currentPeriod", type: "uint256" },
-          { indexed: false, name: "isClosed", type: "bool" },
-          { indexed: false, name: "totalSpankStaked", type: "uint256" },
-          { indexed: false, name: "delegateKey", type: "address" },
-          { indexed: false, name: "bootyBase", type: "address" }
-        ],
+        inputs: [{ indexed: true, name: "staker", type: "address" }],
         name: "VoteToCloseEvent",
         type: "event"
       },
       {
         anonymous: false,
-        inputs: [
-          { indexed: true, name: "staker", type: "address" },
-          { indexed: true, name: "newDelegateKey", type: "address" },
-          { indexed: true, name: "currentPeriod", type: "uint256" },
-          { indexed: false, name: "delegateKey", type: "address" },
-          { indexed: false, name: "bootyBase", type: "address" }
-        ],
+        inputs: [{ indexed: true, name: "staker", type: "address" }],
         name: "UpdateDelegateKeyEvent",
         type: "event"
       },
       {
         anonymous: false,
-        inputs: [
-          { indexed: true, name: "staker", type: "address" },
-          { indexed: true, name: "newBootyBase", type: "address" },
-          { indexed: true, name: "currentPeriod", type: "uint256" },
-          { indexed: false, name: "delegateKey", type: "address" },
-          { indexed: false, name: "bootyBase", type: "address" }
-        ],
+        inputs: [{ indexed: true, name: "staker", type: "address" }],
         name: "UpdateBootyBaseEvent",
         type: "event"
       },
@@ -280,7 +234,6 @@ export class SpankBank extends TypeChainContract {
         anonymous: false,
         inputs: [
           { indexed: false, name: "from", type: "address" },
-          { indexed: false, name: "amount", type: "uint256" },
           { indexed: false, name: "tokenContract", type: "address" },
           { indexed: false, name: "extraData", type: "bytes" }
         ],
@@ -313,82 +266,6 @@ export class SpankBank extends TypeChainContract {
         outputs: [{ name: "success", type: "bool" }],
         payable: false,
         stateMutability: "nonpayable",
-        type: "function"
-      },
-      {
-        constant: true,
-        inputs: [
-          { name: "stakerAddress", type: "address" },
-          { name: "period", type: "uint256" }
-        ],
-        name: "getSpankPoints",
-        outputs: [{ name: "", type: "uint256" }],
-        payable: false,
-        stateMutability: "view",
-        type: "function"
-      },
-      {
-        constant: true,
-        inputs: [
-          { name: "stakerAddress", type: "address" },
-          { name: "period", type: "uint256" }
-        ],
-        name: "getDidClaimBooty",
-        outputs: [{ name: "", type: "bool" }],
-        payable: false,
-        stateMutability: "view",
-        type: "function"
-      },
-      {
-        constant: true,
-        inputs: [
-          { name: "stakerAddress", type: "address" },
-          { name: "period", type: "uint256" }
-        ],
-        name: "getVote",
-        outputs: [{ name: "", type: "bool" }],
-        payable: false,
-        stateMutability: "view",
-        type: "function"
-      },
-      {
-        constant: true,
-        inputs: [{ name: "period", type: "uint256" }],
-        name: "getPeriod",
-        outputs: [
-          { name: "", type: "uint256" },
-          { name: "", type: "uint256" },
-          { name: "", type: "uint256" },
-          { name: "", type: "bool" },
-          { name: "", type: "uint256" },
-          { name: "", type: "uint256" }
-        ],
-        payable: false,
-        stateMutability: "view",
-        type: "function"
-      },
-      {
-        constant: true,
-        inputs: [{ name: "stakerAddress", type: "address" }],
-        name: "getStaker",
-        outputs: [
-          { name: "", type: "uint256" },
-          { name: "", type: "uint256" },
-          { name: "", type: "uint256" },
-          { name: "", type: "address" },
-          { name: "", type: "address" }
-        ],
-        payable: false,
-        stateMutability: "view",
-        type: "function"
-      },
-      {
-        constant: true,
-        inputs: [{ name: "delegateAddress", type: "address" }],
-        name: "getStakerFromDelegateKey",
-        outputs: [{ name: "", type: "address" }],
-        payable: false,
-        stateMutability: "view",
         type: "function"
       },
       {
@@ -485,6 +362,82 @@ export class SpankBank extends TypeChainContract {
         payable: false,
         stateMutability: "nonpayable",
         type: "function"
+      },
+      {
+        constant: true,
+        inputs: [
+          { name: "stakerAddress", type: "address" },
+          { name: "period", type: "uint256" }
+        ],
+        name: "getSpankPoints",
+        outputs: [{ name: "", type: "uint256" }],
+        payable: false,
+        stateMutability: "view",
+        type: "function"
+      },
+      {
+        constant: true,
+        inputs: [
+          { name: "stakerAddress", type: "address" },
+          { name: "period", type: "uint256" }
+        ],
+        name: "getDidClaimBooty",
+        outputs: [{ name: "", type: "bool" }],
+        payable: false,
+        stateMutability: "view",
+        type: "function"
+      },
+      {
+        constant: true,
+        inputs: [
+          { name: "stakerAddress", type: "address" },
+          { name: "period", type: "uint256" }
+        ],
+        name: "getVote",
+        outputs: [{ name: "", type: "bool" }],
+        payable: false,
+        stateMutability: "view",
+        type: "function"
+      },
+      {
+        constant: true,
+        inputs: [{ name: "period", type: "uint256" }],
+        name: "getPeriod",
+        outputs: [
+          { name: "", type: "uint256" },
+          { name: "", type: "uint256" },
+          { name: "", type: "uint256" },
+          { name: "", type: "bool" },
+          { name: "", type: "uint256" },
+          { name: "", type: "uint256" }
+        ],
+        payable: false,
+        stateMutability: "view",
+        type: "function"
+      },
+      {
+        constant: true,
+        inputs: [{ name: "stakerAddress", type: "address" }],
+        name: "getStaker",
+        outputs: [
+          { name: "", type: "uint256" },
+          { name: "", type: "uint256" },
+          { name: "", type: "uint256" },
+          { name: "", type: "address" },
+          { name: "", type: "address" }
+        ],
+        payable: false,
+        stateMutability: "view",
+        type: "function"
+      },
+      {
+        constant: true,
+        inputs: [{ name: "delegateAddress", type: "address" }],
+        name: "getStakerFromDelegateKey",
+        outputs: [{ name: "", type: "address" }],
+        payable: false,
+        stateMutability: "view",
+        type: "function"
       }
     ];
     super(web3, address, abi);
@@ -532,13 +485,15 @@ export class SpankBank extends TypeChainContract {
   public get closingPeriod(): Promise<BigNumber> {
     return promisify(this.rawWeb3Contract.closingPeriod, []);
   }
+  public stakerByDelegateKey(arg0: BigNumber | string): Promise<string> {
+    return promisify(this.rawWeb3Contract.stakerByDelegateKey, [
+      arg0.toString()
+    ]);
+  }
   public stakers(
     arg0: BigNumber | string
   ): Promise<[BigNumber, BigNumber, BigNumber, string, string]> {
     return promisify(this.rawWeb3Contract.stakers, [arg0.toString()]);
-  }
-  public delegateKeys(arg0: BigNumber | string): Promise<string> {
-    return promisify(this.rawWeb3Contract.delegateKeys, [arg0.toString()]);
   }
   public periods(
     arg0: BigNumber | number
@@ -694,130 +649,66 @@ export class SpankBank extends TypeChainContract {
 
   public StakeEventEvent(eventFilter: {
     staker?: BigNumber | string | Array<BigNumber | string>;
-    stakePeriods?: BigNumber | number | Array<BigNumber | number>;
-    startPeriod?: BigNumber | number | Array<BigNumber | number>;
   }): DeferredEventWrapper<
-    {
-      staker: BigNumber | string;
-      stakePeriods: BigNumber | number;
-      startPeriod: BigNumber | number;
-      delegateKey: BigNumber | string;
-      bootyBase: BigNumber | string;
-      currentPeriod: BigNumber | number;
-    },
-    {
-      staker?: BigNumber | string | Array<BigNumber | string>;
-      stakePeriods?: BigNumber | number | Array<BigNumber | number>;
-      startPeriod?: BigNumber | number | Array<BigNumber | number>;
-    }
+    { staker: BigNumber | string },
+    { staker?: BigNumber | string | Array<BigNumber | string> }
   > {
     return new DeferredEventWrapper<
-      {
-        staker: BigNumber | string;
-        stakePeriods: BigNumber | number;
-        startPeriod: BigNumber | number;
-        delegateKey: BigNumber | string;
-        bootyBase: BigNumber | string;
-        currentPeriod: BigNumber | number;
-      },
-      {
-        staker?: BigNumber | string | Array<BigNumber | string>;
-        stakePeriods?: BigNumber | number | Array<BigNumber | number>;
-        startPeriod?: BigNumber | number | Array<BigNumber | number>;
-      }
+      { staker: BigNumber | string },
+      { staker?: BigNumber | string | Array<BigNumber | string> }
     >(this, "StakeEvent", eventFilter);
   }
   public SendFeesEventEvent(eventFilter: {
     sender?: BigNumber | string | Array<BigNumber | string>;
     bootyAmount?: BigNumber | number | Array<BigNumber | number>;
-    currentBootyFees?: BigNumber | number | Array<BigNumber | number>;
   }): DeferredEventWrapper<
-    {
-      sender: BigNumber | string;
-      bootyAmount: BigNumber | number;
-      currentBootyFees: BigNumber | number;
-      currentPeriod: BigNumber | number;
-    },
+    { sender: BigNumber | string; bootyAmount: BigNumber | number },
     {
       sender?: BigNumber | string | Array<BigNumber | string>;
       bootyAmount?: BigNumber | number | Array<BigNumber | number>;
-      currentBootyFees?: BigNumber | number | Array<BigNumber | number>;
     }
   > {
     return new DeferredEventWrapper<
-      {
-        sender: BigNumber | string;
-        bootyAmount: BigNumber | number;
-        currentBootyFees: BigNumber | number;
-        currentPeriod: BigNumber | number;
-      },
+      { sender: BigNumber | string; bootyAmount: BigNumber | number },
       {
         sender?: BigNumber | string | Array<BigNumber | string>;
         bootyAmount?: BigNumber | number | Array<BigNumber | number>;
-        currentBootyFees?: BigNumber | number | Array<BigNumber | number>;
       }
     >(this, "SendFeesEvent", eventFilter);
   }
   public MintBootyEventEvent(eventFilter: {
     targetBootySupply?: BigNumber | number | Array<BigNumber | number>;
     totalBootySupply?: BigNumber | number | Array<BigNumber | number>;
-    currentPeriod?: BigNumber | number | Array<BigNumber | number>;
   }): DeferredEventWrapper<
     {
       targetBootySupply: BigNumber | number;
       totalBootySupply: BigNumber | number;
-      currentPeriod: BigNumber | number;
     },
     {
       targetBootySupply?: BigNumber | number | Array<BigNumber | number>;
       totalBootySupply?: BigNumber | number | Array<BigNumber | number>;
-      currentPeriod?: BigNumber | number | Array<BigNumber | number>;
     }
   > {
     return new DeferredEventWrapper<
       {
         targetBootySupply: BigNumber | number;
         totalBootySupply: BigNumber | number;
-        currentPeriod: BigNumber | number;
       },
       {
         targetBootySupply?: BigNumber | number | Array<BigNumber | number>;
         totalBootySupply?: BigNumber | number | Array<BigNumber | number>;
-        currentPeriod?: BigNumber | number | Array<BigNumber | number>;
       }
     >(this, "MintBootyEvent", eventFilter);
   }
   public CheckInEventEvent(eventFilter: {
     staker?: BigNumber | string | Array<BigNumber | string>;
-    updatedEndingPeriod?: BigNumber | number | Array<BigNumber | number>;
-    currentPeriod?: BigNumber | number | Array<BigNumber | number>;
   }): DeferredEventWrapper<
-    {
-      staker: BigNumber | string;
-      updatedEndingPeriod: BigNumber | number;
-      currentPeriod: BigNumber | number;
-      delegateKey: BigNumber | string;
-      bootyBase: BigNumber | string;
-    },
-    {
-      staker?: BigNumber | string | Array<BigNumber | string>;
-      updatedEndingPeriod?: BigNumber | number | Array<BigNumber | number>;
-      currentPeriod?: BigNumber | number | Array<BigNumber | number>;
-    }
+    { staker: BigNumber | string },
+    { staker?: BigNumber | string | Array<BigNumber | string> }
   > {
     return new DeferredEventWrapper<
-      {
-        staker: BigNumber | string;
-        updatedEndingPeriod: BigNumber | number;
-        currentPeriod: BigNumber | number;
-        delegateKey: BigNumber | string;
-        bootyBase: BigNumber | string;
-      },
-      {
-        staker?: BigNumber | string | Array<BigNumber | string>;
-        updatedEndingPeriod?: BigNumber | number | Array<BigNumber | number>;
-        currentPeriod?: BigNumber | number | Array<BigNumber | number>;
-      }
+      { staker: BigNumber | string },
+      { staker?: BigNumber | string | Array<BigNumber | string> }
     >(this, "CheckInEvent", eventFilter);
   }
   public ClaimBootyEventEvent(eventFilter: {
@@ -829,10 +720,6 @@ export class SpankBank extends TypeChainContract {
       staker: BigNumber | string;
       period: BigNumber | number;
       bootyOwed: BigNumber | number;
-      stakerSpankPoints: BigNumber | number;
-      currentPeriod: BigNumber | number;
-      delegateKey: BigNumber | string;
-      bootyBase: BigNumber | string;
     },
     {
       staker?: BigNumber | string | Array<BigNumber | string>;
@@ -845,10 +732,6 @@ export class SpankBank extends TypeChainContract {
         staker: BigNumber | string;
         period: BigNumber | number;
         bootyOwed: BigNumber | number;
-        stakerSpankPoints: BigNumber | number;
-        currentPeriod: BigNumber | number;
-        delegateKey: BigNumber | string;
-        bootyBase: BigNumber | string;
       },
       {
         staker?: BigNumber | string | Array<BigNumber | string>;
@@ -860,184 +743,83 @@ export class SpankBank extends TypeChainContract {
   public WithdrawStakeEventEvent(eventFilter: {
     staker?: BigNumber | string | Array<BigNumber | string>;
     totalSpankToWithdraw?: BigNumber | number | Array<BigNumber | number>;
-    currentPeriod?: BigNumber | number | Array<BigNumber | number>;
   }): DeferredEventWrapper<
-    {
-      staker: BigNumber | string;
-      totalSpankToWithdraw: BigNumber | number;
-      currentPeriod: BigNumber | number;
-      totalSpankStaked: BigNumber | number;
-      delegateKey: BigNumber | string;
-      bootyBase: BigNumber | string;
-    },
+    { staker: BigNumber | string; totalSpankToWithdraw: BigNumber | number },
     {
       staker?: BigNumber | string | Array<BigNumber | string>;
       totalSpankToWithdraw?: BigNumber | number | Array<BigNumber | number>;
-      currentPeriod?: BigNumber | number | Array<BigNumber | number>;
     }
   > {
     return new DeferredEventWrapper<
-      {
-        staker: BigNumber | string;
-        totalSpankToWithdraw: BigNumber | number;
-        currentPeriod: BigNumber | number;
-        totalSpankStaked: BigNumber | number;
-        delegateKey: BigNumber | string;
-        bootyBase: BigNumber | string;
-      },
+      { staker: BigNumber | string; totalSpankToWithdraw: BigNumber | number },
       {
         staker?: BigNumber | string | Array<BigNumber | string>;
         totalSpankToWithdraw?: BigNumber | number | Array<BigNumber | number>;
-        currentPeriod?: BigNumber | number | Array<BigNumber | number>;
       }
     >(this, "WithdrawStakeEvent", eventFilter);
   }
   public SplitStakeEventEvent(eventFilter: {
     staker?: BigNumber | string | Array<BigNumber | string>;
     newAddress?: BigNumber | string | Array<BigNumber | string>;
-    newDelegateKey?: BigNumber | string | Array<BigNumber | string>;
   }): DeferredEventWrapper<
     {
       staker: BigNumber | string;
       newAddress: BigNumber | string;
-      newDelegateKey: BigNumber | string;
-      newBootyBase: BigNumber | string;
       spankAmount: BigNumber | number;
-      currentPeriod: BigNumber | number;
-      startingPeriod: BigNumber | number;
-      endingPeriod: BigNumber | number;
     },
     {
       staker?: BigNumber | string | Array<BigNumber | string>;
       newAddress?: BigNumber | string | Array<BigNumber | string>;
-      newDelegateKey?: BigNumber | string | Array<BigNumber | string>;
     }
   > {
     return new DeferredEventWrapper<
       {
         staker: BigNumber | string;
         newAddress: BigNumber | string;
-        newDelegateKey: BigNumber | string;
-        newBootyBase: BigNumber | string;
         spankAmount: BigNumber | number;
-        currentPeriod: BigNumber | number;
-        startingPeriod: BigNumber | number;
-        endingPeriod: BigNumber | number;
       },
       {
         staker?: BigNumber | string | Array<BigNumber | string>;
         newAddress?: BigNumber | string | Array<BigNumber | string>;
-        newDelegateKey?: BigNumber | string | Array<BigNumber | string>;
       }
     >(this, "SplitStakeEvent", eventFilter);
   }
   public VoteToCloseEventEvent(eventFilter: {
     staker?: BigNumber | string | Array<BigNumber | string>;
-    spankStaked?: BigNumber | number | Array<BigNumber | number>;
-    currentPeriod?: BigNumber | number | Array<BigNumber | number>;
   }): DeferredEventWrapper<
-    {
-      staker: BigNumber | string;
-      spankStaked: BigNumber | number;
-      currentPeriod: BigNumber | number;
-      isClosed: boolean;
-      totalSpankStaked: BigNumber | number;
-      delegateKey: BigNumber | string;
-      bootyBase: BigNumber | string;
-    },
-    {
-      staker?: BigNumber | string | Array<BigNumber | string>;
-      spankStaked?: BigNumber | number | Array<BigNumber | number>;
-      currentPeriod?: BigNumber | number | Array<BigNumber | number>;
-    }
+    { staker: BigNumber | string },
+    { staker?: BigNumber | string | Array<BigNumber | string> }
   > {
     return new DeferredEventWrapper<
-      {
-        staker: BigNumber | string;
-        spankStaked: BigNumber | number;
-        currentPeriod: BigNumber | number;
-        isClosed: boolean;
-        totalSpankStaked: BigNumber | number;
-        delegateKey: BigNumber | string;
-        bootyBase: BigNumber | string;
-      },
-      {
-        staker?: BigNumber | string | Array<BigNumber | string>;
-        spankStaked?: BigNumber | number | Array<BigNumber | number>;
-        currentPeriod?: BigNumber | number | Array<BigNumber | number>;
-      }
+      { staker: BigNumber | string },
+      { staker?: BigNumber | string | Array<BigNumber | string> }
     >(this, "VoteToCloseEvent", eventFilter);
   }
   public UpdateDelegateKeyEventEvent(eventFilter: {
     staker?: BigNumber | string | Array<BigNumber | string>;
-    newDelegateKey?: BigNumber | string | Array<BigNumber | string>;
-    currentPeriod?: BigNumber | number | Array<BigNumber | number>;
   }): DeferredEventWrapper<
-    {
-      staker: BigNumber | string;
-      newDelegateKey: BigNumber | string;
-      currentPeriod: BigNumber | number;
-      delegateKey: BigNumber | string;
-      bootyBase: BigNumber | string;
-    },
-    {
-      staker?: BigNumber | string | Array<BigNumber | string>;
-      newDelegateKey?: BigNumber | string | Array<BigNumber | string>;
-      currentPeriod?: BigNumber | number | Array<BigNumber | number>;
-    }
+    { staker: BigNumber | string },
+    { staker?: BigNumber | string | Array<BigNumber | string> }
   > {
     return new DeferredEventWrapper<
-      {
-        staker: BigNumber | string;
-        newDelegateKey: BigNumber | string;
-        currentPeriod: BigNumber | number;
-        delegateKey: BigNumber | string;
-        bootyBase: BigNumber | string;
-      },
-      {
-        staker?: BigNumber | string | Array<BigNumber | string>;
-        newDelegateKey?: BigNumber | string | Array<BigNumber | string>;
-        currentPeriod?: BigNumber | number | Array<BigNumber | number>;
-      }
+      { staker: BigNumber | string },
+      { staker?: BigNumber | string | Array<BigNumber | string> }
     >(this, "UpdateDelegateKeyEvent", eventFilter);
   }
   public UpdateBootyBaseEventEvent(eventFilter: {
     staker?: BigNumber | string | Array<BigNumber | string>;
-    newBootyBase?: BigNumber | string | Array<BigNumber | string>;
-    currentPeriod?: BigNumber | number | Array<BigNumber | number>;
   }): DeferredEventWrapper<
-    {
-      staker: BigNumber | string;
-      newBootyBase: BigNumber | string;
-      currentPeriod: BigNumber | number;
-      delegateKey: BigNumber | string;
-      bootyBase: BigNumber | string;
-    },
-    {
-      staker?: BigNumber | string | Array<BigNumber | string>;
-      newBootyBase?: BigNumber | string | Array<BigNumber | string>;
-      currentPeriod?: BigNumber | number | Array<BigNumber | number>;
-    }
+    { staker: BigNumber | string },
+    { staker?: BigNumber | string | Array<BigNumber | string> }
   > {
     return new DeferredEventWrapper<
-      {
-        staker: BigNumber | string;
-        newBootyBase: BigNumber | string;
-        currentPeriod: BigNumber | number;
-        delegateKey: BigNumber | string;
-        bootyBase: BigNumber | string;
-      },
-      {
-        staker?: BigNumber | string | Array<BigNumber | string>;
-        newBootyBase?: BigNumber | string | Array<BigNumber | string>;
-        currentPeriod?: BigNumber | number | Array<BigNumber | number>;
-      }
+      { staker: BigNumber | string },
+      { staker?: BigNumber | string | Array<BigNumber | string> }
     >(this, "UpdateBootyBaseEvent", eventFilter);
   }
   public ReceiveApprovalEventEvent(eventFilter: {}): DeferredEventWrapper<
     {
       from: BigNumber | string;
-      amount: BigNumber | number;
       tokenContract: BigNumber | string;
       extraData: string[];
     },
@@ -1046,7 +828,6 @@ export class SpankBank extends TypeChainContract {
     return new DeferredEventWrapper<
       {
         from: BigNumber | string;
-        amount: BigNumber | number;
         tokenContract: BigNumber | string;
         extraData: string[];
       },

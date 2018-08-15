@@ -26,6 +26,15 @@ export class MintAndBurnToken extends TypeChainContract {
         type: "function"
       },
       {
+        constant: true,
+        inputs: [],
+        name: "name",
+        outputs: [{ name: "", type: "string" }],
+        payable: false,
+        stateMutability: "view",
+        type: "function"
+      },
+      {
         constant: false,
         inputs: [
           { name: "_spender", type: "address" },
@@ -61,6 +70,24 @@ export class MintAndBurnToken extends TypeChainContract {
       },
       {
         constant: true,
+        inputs: [],
+        name: "decimals",
+        outputs: [{ name: "", type: "uint8" }],
+        payable: false,
+        stateMutability: "view",
+        type: "function"
+      },
+      {
+        constant: true,
+        inputs: [],
+        name: "version",
+        outputs: [{ name: "", type: "string" }],
+        payable: false,
+        stateMutability: "view",
+        type: "function"
+      },
+      {
+        constant: true,
         inputs: [{ name: "_owner", type: "address" }],
         name: "balanceOf",
         outputs: [{ name: "balance", type: "uint256" }],
@@ -73,6 +100,15 @@ export class MintAndBurnToken extends TypeChainContract {
         inputs: [],
         name: "owner",
         outputs: [{ name: "", type: "address" }],
+        payable: false,
+        stateMutability: "view",
+        type: "function"
+      },
+      {
+        constant: true,
+        inputs: [],
+        name: "symbol",
+        outputs: [{ name: "", type: "string" }],
         payable: false,
         stateMutability: "view",
         type: "function"
@@ -109,6 +145,16 @@ export class MintAndBurnToken extends TypeChainContract {
         payable: false,
         stateMutability: "nonpayable",
         type: "function"
+      },
+      {
+        inputs: [
+          { name: "_tokenName", type: "string" },
+          { name: "_decimalUnits", type: "uint8" },
+          { name: "_tokenSymbol", type: "string" }
+        ],
+        payable: false,
+        stateMutability: "nonpayable",
+        type: "constructor"
       },
       {
         anonymous: false,
@@ -210,11 +256,23 @@ export class MintAndBurnToken extends TypeChainContract {
   public get mintingFinished(): Promise<boolean> {
     return promisify(this.rawWeb3Contract.mintingFinished, []);
   }
+  public get name(): Promise<string> {
+    return promisify(this.rawWeb3Contract.name, []);
+  }
   public get totalSupply(): Promise<BigNumber> {
     return promisify(this.rawWeb3Contract.totalSupply, []);
   }
+  public get decimals(): Promise<BigNumber> {
+    return promisify(this.rawWeb3Contract.decimals, []);
+  }
+  public get version(): Promise<string> {
+    return promisify(this.rawWeb3Contract.version, []);
+  }
   public get owner(): Promise<string> {
     return promisify(this.rawWeb3Contract.owner, []);
+  }
+  public get symbol(): Promise<string> {
+    return promisify(this.rawWeb3Contract.symbol, []);
   }
   public balanceOf(_owner: BigNumber | string): Promise<BigNumber> {
     return promisify(this.rawWeb3Contract.balanceOf, [_owner.toString()]);
