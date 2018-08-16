@@ -42,7 +42,7 @@ async function getStaker(address) {
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 /* test all happy cases */
-contract('SpankBank::e2e', (accounts) => {
+contract('SpankBank::integration', (accounts) => {
   before('deploy', async () => {
     await restore()
     spankBank = await SpankBank.deployed()
@@ -55,7 +55,7 @@ contract('SpankBank::e2e', (accounts) => {
       stake : 100,
       delegateKey : accounts[0],
       bootyBase : accounts[0],
-      periods : 2
+      periods : 12
     }
 
     await spankToken.approve(spankBank.address, staker.stake, {from: staker.address})
@@ -71,10 +71,15 @@ contract('SpankBank::e2e', (accounts) => {
       await spankBank.sendFees(1, { from: staker.address })
       await wait(2000)
     })
-    it('Mint Booty', async () => {
-      await spankBank.updatePeriod()
+    it('Split Stake', async () => {
       await moveForwardPeriods(1)
-      await spankBank.mintBooty()
+      await spankBank.updatePeriod()
+
+      newStaker = {
+        address: accounts[1]
+      }
+
+      await spankBank.splitStake(newStaker.address, newStaker.address, newStaker.address, staker.stake/2, { from: staker.address })
       await wait(2000)
     })
     it('Check In', async () => {
@@ -83,16 +88,11 @@ contract('SpankBank::e2e', (accounts) => {
       await spankBank.checkIn(checkInPeriod, { from: staker.address })
       await wait(2000)
     })
-    it('Split Stake', async () => {
-      newStaker = {
-        address: accounts[1]
-      }
-      await spankBank.splitStake(newStaker.address, newStaker.address, newStaker.address, staker.stake, { from: staker.address })
+    it('Mint Booty', async () => {
+      await spankBank.mintBooty()
       await wait(2000)
     })
     it('Claim Booty', async () => {
-      await spankBank.updatePeriod()
-      await moveForwardPeriods(staker.periods)
       currentPeriod = await spankBank.currentPeriod()
       await spankBank.claimBooty(parseInt(currentPeriod) - 1, { from: staker.address })
       await wait(2000)
@@ -112,6 +112,8 @@ contract('SpankBank::e2e', (accounts) => {
       await wait(2000)
     })
     it('Withdraw', async () => {
+      await moveForwardPeriods(staker.periods + 1)
+      await spankBank.updatePeriod()
       await spankBank.withdrawStake()
       await wait(2000)
     })
