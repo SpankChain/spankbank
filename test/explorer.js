@@ -59,7 +59,8 @@ contract('SpankBank::integration', (accounts) => {
     }
 
     await spankToken.approve(spankBank.address, staker.stake, {from: staker.address})
-    await bootyToken.approve(spankBank.address, 1, { from: staker.address })
+    // transfer all the booty to force minting
+    await bootyToken.approve(spankBank.address, data.spankbank.initialBootySupply, { from: staker.address })
   })
 
   describe('All SpankBank Events, Happy Case', () => {
@@ -68,7 +69,8 @@ contract('SpankBank::integration', (accounts) => {
       await wait(2000)
     })
     it('Send Fees', async () => {
-      await spankBank.sendFees(1, { from: staker.address })
+      // a shitton of fees to force minting
+      await spankBank.sendFees(data.spankbank.initialBootySupply, { from: staker.address })
       await wait(2000)
     })
     it('Split Stake', async () => {
@@ -82,14 +84,14 @@ contract('SpankBank::integration', (accounts) => {
       await spankBank.splitStake(newStaker.address, newStaker.address, newStaker.address, staker.stake/2, { from: staker.address })
       await wait(2000)
     })
+    it('Mint Booty', async () => {
+      await spankBank.mintBooty()
+      await wait(2000)
+    })
     it('Check In', async () => {
       checkInStaker = await getStaker(staker.address)
       checkInPeriod = parseInt(checkInStaker.endingPeriod) + 1
       await spankBank.checkIn(checkInPeriod, { from: staker.address })
-      await wait(2000)
-    })
-    it('Mint Booty', async () => {
-      await spankBank.mintBooty()
       await wait(2000)
     })
     it('Claim Booty', async () => {
