@@ -68,11 +68,6 @@ contract('SpankBank::integration', (accounts) => {
       await spankBank.stake(staker.stake, staker.periods, staker.delegateKey, staker.bootyBase, { from: staker.address })
       await wait(2000)
     })
-    it('Send Fees', async () => {
-      // a shitton of fees to force minting
-      await spankBank.sendFees(data.spankbank.initialBootySupply, { from: staker.address })
-      await wait(2000)
-    })
     it('Split Stake', async () => {
       await moveForwardPeriods(1)
       await spankBank.updatePeriod()
@@ -86,6 +81,11 @@ contract('SpankBank::integration', (accounts) => {
     })
     it('Check In', async () => {
       await spankBank.checkIn(0, { from: staker.address })
+      await wait(2000)
+    })
+    it('Send Fees', async () => {
+      // a shitton of fees to force minting
+      await spankBank.sendFees(data.spankbank.initialBootySupply, { from: staker.address })
       await wait(2000)
     })
     it('Mint Booty', async () => {
