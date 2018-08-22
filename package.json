@@ -9,7 +9,7 @@
     "ethjs-rpc": "^0.2.0",
     "typechain": "^0.2.3"
   },
-  "version": "0.0.3",
+  "version": "0.0.5",
   "devDependencies": {
     "solc": "^0.4.24",
     "truffle": "^4.1.11",
