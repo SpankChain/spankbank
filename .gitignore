@@ -29,4 +29,3 @@ test/build/
 .node-xmlhttprequest-*
 bid-selection/bids.json
 yarn-error.log
-build/contracts/*
