@@ -1,5 +1,6 @@
 {
   "name": "@spankdev/spankbank",
+  "main": "build",
   "dependencies": {
     "chai": "^4.1.2",
     "chai-as-promised": "^7.1.1",
@@ -8,7 +9,7 @@
     "ethjs-rpc": "^0.2.0",
     "typechain": "^0.2.3"
   },
-  "version": "0.0.2",
+  "version": "0.0.3",
   "devDependencies": {
     "solc": "^0.4.24",
     "truffle": "^4.1.11",
