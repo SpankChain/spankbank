@@ -7,11 +7,8 @@ export interface ITxParams {
   gasPrice?: number | string | BigNumber;
 }
 
-export interface IPayableTxParams {
+export interface IPayableTxParams extends ITxParams {
   value: string | number | BigNumber;
-  from?: string;
-  gas?: number | string | BigNumber;
-  gasPrice?: number | string | BigNumber;
 }
 
 export interface IWatchFilter {
@@ -35,6 +32,21 @@ export class DeferredTransactionWrapper<T extends ITxParams> {
     private readonly methodName: string,
     private readonly methodArgs: any[],
   ) {}
+
+  estimateGas(params: T, customWeb3?: any): Promise<number> {
+    let method: any;
+
+    if (customWeb3) {
+      const tmpContract = customWeb3.eth
+        .contract(this.parentContract.contractAbi)
+        .at(this.parentContract.address);
+      method = tmpContract[this.methodName].estimateGas;
+    } else {
+      method = this.parentContract.rawWeb3Contract[this.methodName].estimateGas;
+    }
+
+    return promisify(method, [...this.methodArgs, params]);
+  }
 
   send(params: T, customWeb3?: any): Promise<string> {
     let method: any;
@@ -83,7 +95,7 @@ export class DeferredEventWrapper<Event, EventIndexedFields> {
       const watchedEvent = this.getRawEvent(watchFilter);
       watchedEvent.watch((err: any, res: any) => {
         // this makes sure to unsubscribe as well
-        watchedEvent.stopWatching((err2, res2) => {
+        watchedEvent.stopWatching(err2 => {
           if (err) {
             reject(err);
           } else if (err2) {
@@ -180,8 +192,4 @@ export interface LogEntry {
 export interface DecodedLogEntry<A> extends LogEntry {
   event: string;
   args: A;
-}
-
-interface IDictionary<T = string> {
-  [id: string]: T;
 }

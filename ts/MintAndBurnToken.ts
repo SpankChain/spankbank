@@ -4,11 +4,20 @@
 import { BigNumber } from "bignumber.js";
 import * as TC from "./typechain-runtime";
 
-export class HumanStandardToken extends TC.TypeChainContract {
+export class MintAndBurnToken extends TC.TypeChainContract {
   public readonly rawWeb3Contract: any;
 
   public constructor(web3: any, address: string | BigNumber) {
     const abi = [
+      {
+        constant: true,
+        inputs: [],
+        name: "mintingFinished",
+        outputs: [{ name: "", type: "bool" }],
+        payable: false,
+        stateMutability: "view",
+        type: "function"
+      },
       {
         constant: true,
         inputs: [],
@@ -82,6 +91,15 @@ export class HumanStandardToken extends TC.TypeChainContract {
       {
         constant: true,
         inputs: [],
+        name: "owner",
+        outputs: [{ name: "", type: "address" }],
+        payable: false,
+        stateMutability: "view",
+        type: "function"
+      },
+      {
+        constant: true,
+        inputs: [],
         name: "symbol",
         outputs: [{ name: "", type: "string" }],
         payable: false,
@@ -113,8 +131,16 @@ export class HumanStandardToken extends TC.TypeChainContract {
         type: "function"
       },
       {
+        constant: false,
+        inputs: [{ name: "newOwner", type: "address" }],
+        name: "transferOwnership",
+        outputs: [],
+        payable: false,
+        stateMutability: "nonpayable",
+        type: "function"
+      },
+      {
         inputs: [
-          { name: "_initialAmount", type: "uint256" },
           { name: "_tokenName", type: "string" },
           { name: "_decimalUnits", type: "uint8" },
           { name: "_tokenSymbol", type: "string" }
@@ -122,6 +148,34 @@ export class HumanStandardToken extends TC.TypeChainContract {
         payable: false,
         stateMutability: "nonpayable",
         type: "constructor"
+      },
+      {
+        anonymous: false,
+        inputs: [
+          { indexed: true, name: "to", type: "address" },
+          { indexed: false, name: "amount", type: "uint256" }
+        ],
+        name: "Mint",
+        type: "event"
+      },
+      { anonymous: false, inputs: [], name: "MintFinished", type: "event" },
+      {
+        anonymous: false,
+        inputs: [
+          { indexed: true, name: "burner", type: "address" },
+          { indexed: false, name: "value", type: "uint256" }
+        ],
+        name: "Burn",
+        type: "event"
+      },
+      {
+        anonymous: false,
+        inputs: [
+          { indexed: true, name: "previousOwner", type: "address" },
+          { indexed: true, name: "newOwner", type: "address" }
+        ],
+        name: "OwnershipTransferred",
+        type: "event"
       },
       {
         anonymous: false,
@@ -146,12 +200,29 @@ export class HumanStandardToken extends TC.TypeChainContract {
       {
         constant: false,
         inputs: [
-          { name: "_spender", type: "address" },
-          { name: "_value", type: "uint256" },
-          { name: "_extraData", type: "bytes" }
+          { name: "_to", type: "address" },
+          { name: "_amount", type: "uint256" }
         ],
-        name: "approveAndCall",
-        outputs: [{ name: "success", type: "bool" }],
+        name: "mint",
+        outputs: [{ name: "", type: "bool" }],
+        payable: false,
+        stateMutability: "nonpayable",
+        type: "function"
+      },
+      {
+        constant: false,
+        inputs: [],
+        name: "finishMinting",
+        outputs: [{ name: "", type: "bool" }],
+        payable: false,
+        stateMutability: "nonpayable",
+        type: "function"
+      },
+      {
+        constant: false,
+        inputs: [{ name: "_value", type: "uint256" }],
+        name: "burn",
+        outputs: [],
         payable: false,
         stateMutability: "nonpayable",
         type: "function"
@@ -163,8 +234,8 @@ export class HumanStandardToken extends TC.TypeChainContract {
   static async createAndValidate(
     web3: any,
     address: string | BigNumber
-  ): Promise<HumanStandardToken> {
-    const contract = new HumanStandardToken(web3, address);
+  ): Promise<MintAndBurnToken> {
+    const contract = new MintAndBurnToken(web3, address);
     const code = await TC.promisify(web3.eth.getCode, [address]);
 
     // in case of missing smartcontract, code can be equal to "0x0" or "0x" depending on exact web3 implementation
@@ -173,6 +244,10 @@ export class HumanStandardToken extends TC.TypeChainContract {
       throw new Error(`Contract at ${address} doesn't exist!`);
     }
     return contract;
+  }
+
+  public get mintingFinished(): Promise<boolean> {
+    return TC.promisify(this.rawWeb3Contract.mintingFinished, []);
   }
 
   public get name(): Promise<string> {
@@ -189,6 +264,10 @@ export class HumanStandardToken extends TC.TypeChainContract {
 
   public get version(): Promise<string> {
     return TC.promisify(this.rawWeb3Contract.version, []);
+  }
+
+  public get owner(): Promise<string> {
+    return TC.promisify(this.rawWeb3Contract.owner, []);
   }
 
   public get symbol(): Promise<string> {
@@ -238,22 +317,86 @@ export class HumanStandardToken extends TC.TypeChainContract {
       _value.toString()
     ]);
   }
-  public approveAndCallTx(
-    _spender: BigNumber | string,
-    _value: BigNumber | number,
-    _extraData: string[]
+  public transferOwnershipTx(
+    newOwner: BigNumber | string
   ): TC.DeferredTransactionWrapper<TC.ITxParams> {
     return new TC.DeferredTransactionWrapper<TC.ITxParams>(
       this,
-      "approveAndCall",
-      [
-        _spender.toString(),
-        _value.toString(),
-        _extraData.map(val => val.toString())
-      ]
+      "transferOwnership",
+      [newOwner.toString()]
     );
   }
+  public mintTx(
+    _to: BigNumber | string,
+    _amount: BigNumber | number
+  ): TC.DeferredTransactionWrapper<TC.ITxParams> {
+    return new TC.DeferredTransactionWrapper<TC.ITxParams>(this, "mint", [
+      _to.toString(),
+      _amount.toString()
+    ]);
+  }
+  public finishMintingTx(): TC.DeferredTransactionWrapper<TC.ITxParams> {
+    return new TC.DeferredTransactionWrapper<TC.ITxParams>(
+      this,
+      "finishMinting",
+      []
+    );
+  }
+  public burnTx(
+    _value: BigNumber | number
+  ): TC.DeferredTransactionWrapper<TC.ITxParams> {
+    return new TC.DeferredTransactionWrapper<TC.ITxParams>(this, "burn", [
+      _value.toString()
+    ]);
+  }
 
+  public MintEvent(eventFilter: {
+    to?: BigNumber | string | Array<BigNumber | string>;
+  }): TC.DeferredEventWrapper<
+    { to: BigNumber | string; amount: BigNumber | number },
+    { to?: BigNumber | string | Array<BigNumber | string> }
+  > {
+    return new TC.DeferredEventWrapper<
+      { to: BigNumber | string; amount: BigNumber | number },
+      { to?: BigNumber | string | Array<BigNumber | string> }
+    >(this, "Mint", eventFilter);
+  }
+  public MintFinishedEvent(eventFilter: {}): TC.DeferredEventWrapper<{}, {}> {
+    return new TC.DeferredEventWrapper<{}, {}>(
+      this,
+      "MintFinished",
+      eventFilter
+    );
+  }
+  public BurnEvent(eventFilter: {
+    burner?: BigNumber | string | Array<BigNumber | string>;
+  }): TC.DeferredEventWrapper<
+    { burner: BigNumber | string; value: BigNumber | number },
+    { burner?: BigNumber | string | Array<BigNumber | string> }
+  > {
+    return new TC.DeferredEventWrapper<
+      { burner: BigNumber | string; value: BigNumber | number },
+      { burner?: BigNumber | string | Array<BigNumber | string> }
+    >(this, "Burn", eventFilter);
+  }
+  public OwnershipTransferredEvent(eventFilter: {
+    previousOwner?: BigNumber | string | Array<BigNumber | string>;
+    newOwner?: BigNumber | string | Array<BigNumber | string>;
+  }): TC.DeferredEventWrapper<
+    { previousOwner: BigNumber | string; newOwner: BigNumber | string },
+    {
+      previousOwner?: BigNumber | string | Array<BigNumber | string>;
+      newOwner?: BigNumber | string | Array<BigNumber | string>;
+    }
+  > {
+    return new TC.DeferredEventWrapper<
+      { previousOwner: BigNumber | string; newOwner: BigNumber | string },
+      {
+        previousOwner?: BigNumber | string | Array<BigNumber | string>;
+        newOwner?: BigNumber | string | Array<BigNumber | string>;
+      }
+    >(this, "OwnershipTransferred", eventFilter);
+  }
   public TransferEvent(eventFilter: {
     _from?: BigNumber | string | Array<BigNumber | string>;
     _to?: BigNumber | string | Array<BigNumber | string>;
