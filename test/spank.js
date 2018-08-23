@@ -1,5 +1,5 @@
 // TODO
-// 1. test each value of spankpoints
+// 1. test each value of spankpoints (stake for each possible period)
 // 2. test staking with different delegateKey/bootyBase values
 // 3. console logs arent happening - do I need to use promise based assertions?
 // 4. not sure what tests should be done in separate msig file
@@ -68,6 +68,8 @@ function multiSigStake(spankAmount, stakePeriods, delegateKey, bootyBase) {
 }
 
 contract('SpankBank', (accounts) => {
+  let snapshotId
+
   before('deploy contracts', async () => {
     spankbank = await SpankBank.deployed()
     spankToken = await SpankToken.deployed()
@@ -82,9 +84,7 @@ contract('SpankBank', (accounts) => {
 
   // TODO test proper contract initialization here.
 
-  describe('Staking has nine requirements (counting logical AND requirements individually when possible).\n\t1. stake period greater than zero \n\t2. stake period less than or equal to maxPeriods \n\t3. stake greater than zero \n\t4. startingPeriod is zero \n\t5. endingPeriod is zero \n\t6. transfer complete \n\t7. delegateKey is not 0x0 \n\t8. bootyBase is not 0x0 \n\t9. delegateKey -> stakerAddress is 0x0\n', () => {
-
-    let snapshotId
+  describe.skip('Staking has nine requirements (counting logical AND requirements individually when possible).\n\t1. stake period greater than zero \n\t2. stake period less than or equal to maxPeriods \n\t3. stake greater than zero \n\t4. startingPeriod is zero \n\t5. endingPeriod is zero \n\t6. transfer complete \n\t7. delegateKey is not 0x0 \n\t8. bootyBase is not 0x0 \n\t9. delegateKey -> stakerAddress is 0x0\n', () => {
 
     const calcSpankPoints = (staker) => {
       return (staker.periods * 5) + 40
@@ -222,14 +222,14 @@ contract('SpankBank', (accounts) => {
       // TODO test staking after moving forward periods?
     })
 
-    it('6.1 transfer failure - transfer below approved balance', async () => {
+    it('6.1 transfer failure - insufficient balance', async () => {
       await spankToken.transfer(owner, 100, {from: staker1.address})
 
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith(SolRevert)
     })
 
     it('6.2 transfer failure - staker never approved', async () => {
-      // TODO use constructor
+      // TODO use constructor?
       staker2 = {
         address : accounts[2],
         stake : 100,
@@ -282,8 +282,52 @@ contract('SpankBank', (accounts) => {
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith(SolRevert)
     })
   })
+
+  describe('sending fees has two requirements\n\t1. BOOTY amount must be greater than zero\n\t2. transfer complete\n', () => {
+
+    // Note: The initialBootySupply is minted and sent to the SpankBank owner
+    // (whoever deployed it) during contract deployment.
+
+    beforeEach(async () => {
+      snapshotId = await snapshot()
+      await spankbank.updatePeriod()
+      currentPeriod = +(await spankbank.currentPeriod())
+    })
+
+    afterEach(async () => {
+      await restore(snapshotId)
+    })
+
+    it('0. happy case', async () => {
+      await bootyToken.approve(spankbank.address, 1000, {from: owner})
+      await spankbank.sendFees(1000, {from: owner})
+
+      const totalBootySupply = await bootyToken.totalSupply.call()
+      assert.equal(totalBootySupply, data.spankbank.initialBootySupply - 1000)
+
+      const ownerBootyBalance = await bootyToken.balanceOf.call(owner)
+      assert.equal(ownerBootyBalance, data.spankbank.initialBootySupply - 1000)
+
+      // TODO will break if we move forward periods beforehand
+      const [bootyFees] = await spankbank.periods(currentPeriod)
+      assert.equal(+bootyFees, 1000)
+    })
+
+    it('1. sending zero amount', async () => {
+      await bootyToken.approve(spankbank.address, 1000, {from: owner})
+      await spankbank.sendFees(0, {from: owner}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('2.1 transfer failure - insufficient balance', async () => {
+      // first approve the booty transfer, but then send away all the booty
+      await bootyToken.approve(spankbank.address, 1000, {from: owner})
+      await bootyToken.transfer(accounts[1], data.spankbank.initialBootySupply, {from: owner})
+
+      await spankbank.sendFees(1000, {from: owner}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('2.2 transfer failure - sender didnt approve', async () => {
+      await spankbank.sendFees(1000, {from: owner}).should.be.rejectedWith(SolRevert)
+    })
+  })
 })
-
-
-
-

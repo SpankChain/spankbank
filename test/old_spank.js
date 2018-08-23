@@ -480,7 +480,7 @@ contract('SpankBank::sendFees', (accounts) => {
 
   describe('sending fees has two requirements\n\t1. BOOTY amount must be greater than zero\n\t2. transfer complete', () => {
     it('1. sending zero amount', async () => {
-      await spankbank.sendFees(0,{frome: staker.address}).should.be.rejectedWith(SolRevert)
+      await spankbank.sendFees(0,{from: staker.address}).should.be.rejectedWith(SolRevert)
     })
 
     it('2. transfer failure - sending more than exists', async () => {
