@@ -1,3 +1,6 @@
+// TODO closingVotes is defined on period but never used
+// - should be removed globally -> only use period votes
+
 pragma solidity 0.4.24;
 import {SafeMath} from "./SafeMath.sol";
 import {HumanStandardToken} from "./HumanStandardToken.sol";
@@ -11,7 +14,7 @@ contract SpankBank {
     event StakeEvent(
         address indexed staker
     );
-    
+
     event SendFeesEvent (
         address indexed sender,
         uint256 indexed bootyAmount
@@ -56,8 +59,8 @@ contract SpankBank {
     );
 
     event ReceiveApprovalEvent (
-        address from, 
-        address tokenContract, 
+        address from,
+        address tokenContract,
         bytes extraData
     );
 
@@ -95,7 +98,7 @@ contract SpankBank {
         uint256 endingPeriod; // the period after which this stake expires
         mapping(uint256 => uint256) spankPoints; // the spankPoints per period
         mapping(uint256 => bool) didClaimBooty; // true if staker claimed BOOTY for that period
-        mapping(uint256 => bool) votedToClose; // true if voter voted 
+        mapping(uint256 => bool) votedToClose; // true if voter voted
         address delegateKey;
         address bootyBase;
     }
@@ -212,9 +215,9 @@ contract SpankBank {
         address delegateKeyFromBytes = extraData.toAddress(12);
         address bootyBaseFromBytes = extraData.toAddress(44);
         uint256 periodFromBytes = extraData.toUint(64);
-        
+
         emit ReceiveApprovalEvent(from, tokenContract, extraData);
-        
+
         doStake(from, amount, periodFromBytes, delegateKeyFromBytes, bootyBaseFromBytes);
         return true;
     }
@@ -304,7 +307,7 @@ contract SpankBank {
         uint256 stakePeriods = staker.endingPeriod - currentPeriod;
 
         _calculateNextPeriodPoints(stakerAddress, stakePeriods);
-        
+
         emit CheckInEvent(stakerAddress);
     }
 
@@ -323,7 +326,7 @@ contract SpankBank {
 
         Period memory period = periods[_period];
         require(period.mintingComplete);
-        
+
         uint256 bootyMinted = period.bootyMinted;
         uint256 totalSpankPoints = period.totalSpankPoints;
 
@@ -383,7 +386,7 @@ contract SpankBank {
 
         Staker storage staker = stakers[msg.sender];
         require(staker.spankStaked > 0, "stake must be greater than zero");
-        require(staker.endingPeriod >= currentPeriod, "endingPeriod must be greater than or equal to currentPeriod");        
+        require(staker.endingPeriod >= currentPeriod, "endingPeriod must be greater than or equal to currentPeriod");
         require (staker.votedToClose[currentPeriod] == false);
         require(isClosed == false);
 
@@ -409,7 +412,7 @@ contract SpankBank {
         Staker storage staker = stakers[msg.sender];
         require (staker.delegateKey != address(0));
         staker.delegateKey = newDelegateKey;
-        
+
         stakerByDelegateKey[staker.delegateKey] = address(0);
 
         stakerByDelegateKey[newDelegateKey] = msg.sender;
