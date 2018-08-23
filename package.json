@@ -1,20 +1,20 @@
 {
   "name": "@spankdev/spankbank",
+  "main": "build",
   "dependencies": {
     "chai": "^4.1.2",
     "chai-as-promised": "^7.1.1",
     "chai-bignumber": "^2.0.2",
     "ethjs-provider-http": "^0.1.6",
-    "ethjs-rpc": "^0.2.0",
-    "typechain": "^0.2.3"
+    "ethjs-rpc": "^0.2.0"
   },
-  "version": "0.0.1",
+  "version": "0.0.4",
   "devDependencies": {
     "solc": "^0.4.24",
     "truffle": "^4.1.11",
     "truffle-hdwallet-provider": "0.0.5"
   },
   "scripts": {
-    "postinstall": "./node_modules/.bin/typechain --force --outDir ./ts/ './build/contracts/*.json'"
+    "prepublish": "make"
   }
 }
