@@ -12,7 +12,7 @@ const ethRPC = new EthRPC(new HttpProvider('http://localhost:8545'))
 const BigNumber = web3.BigNumber
 
 // TODO remove should?
-// const should = require('chai').use(require('chai-as-promised')).use(require('chai-bignumber')(BigNumber)).should()
+const should = require('chai').use(require('chai-as-promised')).use(require('chai-bignumber')(BigNumber)).should()
 const SolRevert = 'VM Exception while processing transaction: revert'
 
 const SpankToken = artifacts.require('./HumanStandardToken')
@@ -70,7 +70,6 @@ contract('SpankBank', (accounts) => {
     let snapshotId
 
     beforeEach(async () => {
-      console.log('Before Each')
       snapshotId = await snapshot()
 
       staker1 = {
@@ -86,11 +85,10 @@ contract('SpankBank', (accounts) => {
     })
 
     afterEach(async () => {
-      console.log('After Each')
       await restore(snapshotId)
     })
 
-    it('1. Happy Case', async () => {
+    it('0. happy case', async () => {
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
 
       // currentPeriod is the same
@@ -139,68 +137,91 @@ contract('SpankBank', (accounts) => {
       assert.equal(stakerAddress, staker1.address)
     })
 
-    it('2. testing snapshot/restore', async () => {
-      // totalSpankStaked
-      const totalSpankStaked = await spankToken.balanceOf.call(spankbank.address)
-      assert.equal(+totalSpankStaked, 0)
+    it('1. stake periods is zero', async () => {
+      staker1.periods = 0
+
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith(SolRevert)
     })
 
-    it.skip('1. stake periods is zero', async () => {
-      staker.periods = 0
-      bankedStaker = await getStaker(staker.address)
-      stakerBalance = await spankToken.balanceOf(staker.address)
-      bankedDelegateKey = await spankbank.getStakerFromDelegateKey(staker.address)
-      expect(staker.periods).to.be.equal(0) // 1. fail
-      expect(staker.periods).to.be.below(maxPeriods) // 2. pass
-      expect(staker.stake).to.be.above(0) // 3. pass
-      bankedStaker.startingPeriod.should.be.bignumber.equal(0) // 4. pass
-      bankedStaker.endingPeriod.should.be.bignumber.equal(0) // 5. pass
-      stakerBalance.should.not.be.bignumber.below(staker.stake) // 6. pass
-      expect(staker.delegateKey).to.not.be.equal("0x0000000000000000000000000000000000000000") // 7. pass
-      expect(staker.bootyBase).to.not.be.equal("0x0000000000000000000000000000000000000000") // 8. pass
-      expect(bankedDelegateKey).to.be.equal("0x0000000000000000000000000000000000000000") // 9. pass
+    it('2. stake periods is greater than maxPeriods', async () => {
+      staker1.periods = 13
 
-      await spankbank.stake(staker.stake, staker.periods, staker.address, staker.address, {from : staker.address}).should.be.rejectedWith(SolRevert)
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith(SolRevert)
     })
 
-    it.skip('2. stake periods is greater than maxPeriods', async () => {
-      staker.periods = 13
-      bankedStaker = await getStaker(staker.address)
-      stakerBalance = await spankToken.balanceOf(staker.address)
-      bankedDelegateKey = await spankbank.getStakerFromDelegateKey(staker.address)
-      expect(staker.periods).to.be.above(0) // 1. pass
-      expect(staker.periods).to.be.above(maxPeriods) // 2. fail
-      expect(staker.stake).to.be.above(0) // 3. pass
-      bankedStaker.startingPeriod.should.be.bignumber.equal(0) // 4. pass
-      bankedStaker.endingPeriod.should.be.bignumber.equal(0) // 5. pass
-      stakerBalance.should.not.be.bignumber.below(staker.stake) // 6. pass
-      expect(staker.delegateKey).to.not.be.equal("0x0000000000000000000000000000000000000000") // 7. pass
-      expect(staker.bootyBase).to.not.be.equal("0x0000000000000000000000000000000000000000") // 8. pass
-      expect(bankedDelegateKey).to.be.equal("0x0000000000000000000000000000000000000000") // 9. pass
+    it('3. stake amount is zero', async () => {
+      staker1.stake = 0
 
-      await spankbank.stake(staker.stake, staker.periods, staker.address, staker.address, {from : staker.address}).should.be.rejectedWith(SolRevert)
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith(SolRevert)
     })
 
-    it.skip('3. stake amount is zero', async () => {
-      staker.periods = 12
-      staker.stake = 0
+    it('4/5/(9). startingPeriod and EndingPeriod not zero (staker delegateKey exists)', async () => {
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
 
-      bankedStaker = await getStaker(staker.address)
-      stakerBalance = await spankToken.balanceOf(staker.address)
-      bankedDelegateKey = await spankbank.getStakerFromDelegateKey(staker.address)
-      expect(staker.periods).to.be.above(0) // 1. pass
-      expect(staker.periods).to.not.be.above(maxPeriods) // 2. pass
-      expect(staker.stake).to.be.equal(0) // 3. fail
-      bankedStaker.startingPeriod.should.be.bignumber.equal(0) // 4. pass
-      bankedStaker.endingPeriod.should.be.bignumber.equal(0) // 5. pass
-      stakerBalance.should.not.be.bignumber.below(staker.stake) // 6. pass
-      expect(staker.delegateKey).to.not.be.equal("0x0000000000000000000000000000000000000000") // 7. pass
-      expect(staker.bootyBase).to.not.be.equal("0x0000000000000000000000000000000000000000") // 8. pass
-      expect(bankedDelegateKey).to.be.equal("0x0000000000000000000000000000000000000000") // 9. pass
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith(SolRevert)
 
-      await spankbank.stake(staker.stake, staker.periods, staker.address, staker.address, {from : staker.address}).should.be.rejectedWith(SolRevert)
+      // TODO test staking after moving forward periods?
     })
 
+    it('6.1 transfer failure - transfer below approved balance', async () => {
+      await spankToken.transfer(owner, 100, {from: staker1.address})
+
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('6.2 transfer failure - staker never approved', async () => {
+      // TODO use constructor
+      staker2 = {
+        address : accounts[2],
+        stake : 100,
+        delegateKey : accounts[2],
+        bootyBase : accounts[2],
+        periods: 12
+      }
+
+      await spankToken.transfer(staker2.address, 100, {from: owner})
+
+      await spankbank.stake(staker2.stake, staker2.periods, staker2.delegateKey, staker2.bootyBase, {from : staker2.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('7. staker delegate key is 0x0', async () => {
+      staker1.delegateKey = "0x0000000000000000000000000000000000000000"
+
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('8. staker bootyBase is 0x0', async () => {
+      staker1.bootyBase = "0x0000000000000000000000000000000000000000"
+
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('9. delegateKey has already been used', async () => {
+      staker2 = {
+        address : accounts[2],
+        stake : 100,
+        delegateKey : accounts[2],
+        bootyBase : accounts[2],
+        periods: 12
+      }
+
+      staker1.delegateKey = staker2.delegateKey
+
+      await spankToken.transfer(staker2.address, 100, {from: owner})
+      await spankToken.approve(spankbank.address, staker2.stake, {from: staker2.address})
+
+      staker2Address = await spankbank.getStakerFromDelegateKey(staker2.delegateKey)
+
+      // staker 2 successfully stakes
+      await spankbank.stake(staker2.stake, staker2.periods, staker2.delegateKey, staker2.bootyBase, {from : staker2.address})
+
+      // confirm staker2 delegateKey lookup -> staker2 address
+      staker2Address = await spankbank.getStakerFromDelegateKey(staker2.delegateKey)
+      assert.equal(staker2Address, staker2.address)
+
+      // staker1 staking fails b/c delegateKey is pointing -> staker2
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith(SolRevert)
+    })
   })
 })
 

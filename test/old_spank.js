@@ -308,10 +308,19 @@ contract('SpankBank::stake', (accounts) => {
       expect(newStaker.stake).to.be.above(0) // 3. pass
       bankedStaker.startingPeriod.should.be.bignumber.equal(0) // 4. pass
       bankedStaker.endingPeriod.should.be.bignumber.equal(0) // 5. pass
+      console.log('stakerBalance')
+      console.log(stakerBalance)
+      console.log('newStaker.stake')
+      console.log(newStaker.stake)
+      allowance = await spankToken.allowance(newStaker.address, spankbank.address)
+      console.log('allowance')
+      console.log(allowance)
       stakerBalance.should.not.be.bignumber.below(newStaker.stake) // 6. fail
       expect(newStaker.delegateKey).to.not.be.equal("0x0000000000000000000000000000000000000000") // 7. pass
       expect(newStaker.bootyBase).to.not.be.equal("0x0000000000000000000000000000000000000000") // 8. pass
       expect(bankedDelegateKey).to.be.equal("0x0000000000000000000000000000000000000000") // 9. pass
+
+      // TODO why does this fail? it the approval should be enough, right?
 
       await spankbank.stake(newStaker.stake, newStaker.periods, newStaker.delegateKey, newStaker.address, {from : newStaker.address}).should.be.rejectedWith(SolRevert)
     })
