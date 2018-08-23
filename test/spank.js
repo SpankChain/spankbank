@@ -69,6 +69,59 @@ contract('SpankBank', (accounts) => {
 
     let snapshotId
 
+    const calcSpankPoints = (staker) => {
+      return (staker.periods * 5) + 40
+    }
+
+    const verifyStake = async (staker) => {
+      // current period
+      const currentPeriod = +(await spankbank.currentPeriod())
+      const nextPeriod = currentPeriod + 1
+
+      // totalSpankStaked (assumes single staker)
+      const totalSpankStaked = await spankToken.balanceOf.call(spankbank.address)
+      assert.equal(totalSpankStaked, staker.stake)
+
+      // stakers[staker.address] -> Staker
+      const bankedStaker = await spankbank.stakers(staker.address)
+      const [spankStaked, startingPeriod, endingPeriod, delegateKey, bootyBase] = bankedStaker
+      assert.equal(spankStaked, staker.stake)
+      // staking during period 0 -> starting period = 1
+      assert.equal(startingPeriod, nextPeriod)
+      // staking during period 0 -> ending period = 12
+      assert.equal(endingPeriod, currentPeriod + staker.periods)
+      assert.equal(delegateKey, staker.delegateKey)
+      assert.equal(bootyBase, staker.bootyBase)
+
+      // staker spankpoints for next period
+      const spankPoints = await spankbank.getSpankPoints.call(staker.address, nextPeriod)
+      assert.equal(spankPoints, calcSpankPoints(staker))
+
+      // total spankpoints for next period (assumes single staker)
+      const [_, totalSpankPoints] = await spankbank.periods(nextPeriod)
+      assert.equal(+totalSpankPoints, +spankPoints)
+
+      // didClaimBooty default false - current period
+      const didClaimBooty_current = await spankbank.getDidClaimBooty.call(staker.address, currentPeriod)
+      assert.equal(didClaimBooty_current, false)
+
+      // didClaimBooty default false - next period
+      const didClaimBooty_next = await spankbank.getDidClaimBooty.call(staker.address, nextPeriod)
+      assert.equal(didClaimBooty_next, false)
+
+      // user SPANK decreased (assumes all SPANK is staked)
+      const stakerSpankBalance = await spankToken.balanceOf(staker.address)
+      assert.equal(+stakerSpankBalance, 0)
+
+      // spankBank SPANK increased
+      const spankbankSpankBalance = await spankToken.balanceOf(spankbank.address)
+      assert.equal(+spankbankSpankBalance, staker.stake)
+
+      // stakerByDelegateKey -> set
+      const stakerAddress = await spankbank.getStakerFromDelegateKey(staker.delegateKey)
+      assert.equal(stakerAddress, staker.address)
+    }
+
     beforeEach(async () => {
       snapshotId = await snapshot()
 
@@ -80,7 +133,7 @@ contract('SpankBank', (accounts) => {
         periods: 12
       }
 
-      await spankToken.transfer(staker1.address, 100, {from: owner})
+      await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
       await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
     })
 
@@ -88,53 +141,16 @@ contract('SpankBank', (accounts) => {
       await restore(snapshotId)
     })
 
-    it('0. happy case', async () => {
+    it('0.1 happy case - stake directly', async () => {
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
 
-      // currentPeriod is the same
-      const currentPeriod = parseInt(await spankbank.currentPeriod())
-      assert.equal(currentPeriod, 0)
+      await verifyStake(staker1)
+    })
 
-      // totalSpankStaked
-      const totalSpankStaked = await spankToken.balanceOf.call(spankbank.address)
-      assert.equal(totalSpankStaked, 100)
+    it.skip('0.2 happy case - receive approval', async () => {
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
 
-      // stakers[staker.address] -> Staker
-      const bankedStaker = await spankbank.stakers(staker1.address)
-      const [spankStaked, startingPeriod, endingPeriod, delegateKey, bootyBase] = bankedStaker
-      assert.equal(spankStaked, 100)
-      assert.equal(startingPeriod, 1)
-      assert.equal(endingPeriod, 12)
-      assert.equal(delegateKey, staker1.delegateKey)
-      assert.equal(bootyBase, staker1.bootyBase)
-
-      // staker spankpoints
-      const spankPoints = await spankbank.getSpankPoints.call(staker1.address, 1)
-      assert.equal(spankPoints, 100)
-
-      // total spankpoints
-      const [_, totalSpankPoints] = await spankbank.periods(1)
-      assert.equal(totalSpankPoints, 100)
-
-      // didClaimBooty default false - period 0
-      const didClaimBooty_0 = await spankbank.getDidClaimBooty.call(staker1.address, 0)
-      assert.equal(didClaimBooty_0, false)
-
-      // didClaimBooty default false - period 1
-      const didClaimBooty_1 = await spankbank.getDidClaimBooty.call(staker1.address, 1)
-      assert.equal(didClaimBooty_1, false)
-
-      // user SPANK decreased
-      const stakerSpankBalance = await spankToken.balanceOf(staker1.address)
-      assert.equal(+stakerSpankBalance, 0)
-
-      // spankBank SPANK increased
-      const spankbankSpankBalance = await spankToken.balanceOf(spankbank.address)
-      assert.equal(+spankbankSpankBalance, 100)
-
-      // stakerByDelegateKey -> set
-      const stakerAddress = await spankbank.getStakerFromDelegateKey(staker1.delegateKey)
-      assert.equal(stakerAddress, staker1.address)
+      await verifyStake(staker1)
     })
 
     it('1. stake periods is zero', async () => {
@@ -221,6 +237,32 @@ contract('SpankBank', (accounts) => {
 
       // staker1 staking fails b/c delegateKey is pointing -> staker2
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    // This is a happy case test...
+    // I want to make sure it succeeds and values are properly set
+    // this means I should abstract the tests in the happy case test so I can
+    // do it again...
+    it.skip('10. can stake with receive approval', async () => {
+      // receiveApproval
+      raBankedStaker = await getStaker(raStaker.address)
+      raStakerBalance = await spankToken.balanceOf(raStaker.address)
+      raBankedDelegateKey = await spankbank.getStakerFromDelegateKey(raStaker.address)
+      raStaker.delegateKey = raStaker.address
+      raStaker.bootyBase = raStaker.address
+      expect(raStaker.periods).to.be.above(0) // 1. pass
+      expect(raStaker.periods).to.not.be.above(maxPeriods) // 2. pass
+      expect(raStaker.stake).to.be.above(0) // 3. pass
+      raBankedStaker.startingPeriod.should.be.bignumber.equal(0) // 4. pass
+      raBankedStaker.endingPeriod.should.be.bignumber.equal(0) // 5. pass
+      raStakerBalance.should.not.be.bignumber.below(raStaker.stake) // 6. pass
+      expect(raStaker.delegateKey).to.not.be.equal("0x0000000000000000000000000000000000000000") // 7. pass
+      expect(raStaker.bootyBase).to.not.be.equal("0x0000000000000000000000000000000000000000") // 8. pass
+      expect(raBankedDelegateKey).to.be.equal("0x0000000000000000000000000000000000000000") // 9. pass
+
+      // TODO shouldn't call the variable the same name as the function
+      extraData = extraData(raStaker.periods, raStaker.address, raStaker.address)
+      await spankToken.approveAndCall(spankbank.address, raStaker.stake, extraData, {from: raStaker.address})
     })
   })
 })
