@@ -2,22 +2,27 @@
 // 1. test each value of spankpoints
 // 2. test staking with different delegateKey/bootyBase values
 // 3. console logs arent happening - do I need to use promise based assertions?
+// 4. not sure what tests should be done in separate msig file
 
 // const {injectInTruffle} = require(`sol-trace`)
 // injectInTruffle(web3, artifacts);
+
+const { decToBytes, addrToBytes } = require('./utils')
+
 const HttpProvider = require(`ethjs-provider-http`)
 const EthRPC = require(`ethjs-rpc`)
 const ethRPC = new EthRPC(new HttpProvider('http://localhost:8545'))
 
 const BigNumber = web3.BigNumber
 
-// TODO remove should?
 const should = require('chai').use(require('chai-as-promised')).use(require('chai-bignumber')(BigNumber)).should()
 const SolRevert = 'VM Exception while processing transaction: revert'
 
 const SpankToken = artifacts.require('./HumanStandardToken')
 const BootyToken = artifacts.require('./MintAndBurnToken')
 const SpankBank = artifacts.require('./SpankBank')
+
+const MultiSigWallet = artifacts.require('./MultiSigWallet')
 
 const data = require('../data.json')
 
@@ -45,6 +50,23 @@ async function restore(snapshotId) {
   })
 }
 
+function makeExtraData(periodLength, delegateKey, bootyBase) {
+  sixtyFourZeros = "0000000000000000000000000000000000000000000000000000000000000000"
+  periodLengthHex = periodLength.toString(16)
+  delegateKey = delegateKey.split("0x")[1]
+  bootyBase = bootyBase.split("0x")[1]
+  periodLengthData = String(sixtyFourZeros.substring(0,sixtyFourZeros.length - periodLengthHex.length)) + periodLengthHex
+  return '0x0000000000000000000000000000000000000000000000000000000000000060000000000000000000000000' + delegateKey + '000000000000000000000000' + bootyBase + periodLengthData
+}
+
+function multiSigApprove(_spender, _value) {
+  return '0x095ea7b3' + addrToBytes(_spender) + decToBytes(_value)
+}
+
+function multiSigStake(spankAmount, stakePeriods, delegateKey, bootyBase) {
+  return '0x40809acd' + decToBytes(spankAmount) + decToBytes(stakePeriods) + addrToBytes(delegateKey) + addrToBytes(bootyBase)
+}
+
 contract('SpankBank', (accounts) => {
   before('deploy contracts', async () => {
     spankbank = await SpankBank.deployed()
@@ -53,17 +75,12 @@ contract('SpankBank', (accounts) => {
     bootyToken = await BootyToken.at(bootyAddress)
     maxPeriods = parseInt(await spankbank.maxPeriods())
 
+    multisig = await MultiSigWallet.deployed()
+
     owner = accounts[0]
   })
 
   // TODO test proper contract initialization here.
-
-  // TODO this is a superstitious way of testing - each test is repeated to
-  // ensure the only thing different about that particular test case is the
-  // failing condition. The better way to do this is to do all setup inside
-  // a beforeEach, make sure the initial test passes, and then *only* change
-  // what is necessary inside each test. This removes a lot of the extra
-  // clutter and confusion, allowing the reader to focus.
 
   describe('Staking has nine requirements (counting logical AND requirements individually when possible).\n\t1. stake period greater than zero \n\t2. stake period less than or equal to maxPeriods \n\t3. stake greater than zero \n\t4. startingPeriod is zero \n\t5. endingPeriod is zero \n\t6. transfer complete \n\t7. delegateKey is not 0x0 \n\t8. bootyBase is not 0x0 \n\t9. delegateKey -> stakerAddress is 0x0\n', () => {
 
@@ -147,10 +164,36 @@ contract('SpankBank', (accounts) => {
       await verifyStake(staker1)
     })
 
-    it.skip('0.2 happy case - receive approval', async () => {
-      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+    it('0.2 happy case - receive approval', async () => {
+      const extraData = makeExtraData(staker1.periods, staker1.delegateKey, staker1.bootyBase)
+      await spankToken.approveAndCall(spankbank.address, staker1.stake, extraData, {from: staker1.address})
 
       await verifyStake(staker1)
+    })
+
+    it('0.3 happy case - multisig stake', async () => {
+      // TODO perhaps move all multisig tests to separate file
+
+      const msKey1 = accounts[0]
+      const msKey2 = accounts[1]
+
+      const msStaker = {
+        address : multisig.address,
+        stake : 100,
+        delegateKey : multisig.address,
+        bootyBase : multisig.address,
+        periods : 12
+      }
+
+      await spankToken.transfer(msStaker.address, msStaker.stake, {from: owner})
+
+      await multisig.submitTransaction(spankToken.address, 0, multiSigApprove(spankbank.address, msStaker.stake), {from:msKey1})
+      approveTx = await multisig.confirmTransaction(0, {from:msKey2})
+
+      await multisig.submitTransaction(spankbank.address, 0, multiSigStake(msStaker.stake, msStaker.periods, msStaker.delegateKey, msStaker.bootyBase, {from : msKey1}))
+      stakeTx = await multisig.confirmTransaction(1, {from:msKey2})
+
+      await verifyStake(msStaker)
     })
 
     it('1. stake periods is zero', async () => {
@@ -237,32 +280,6 @@ contract('SpankBank', (accounts) => {
 
       // staker1 staking fails b/c delegateKey is pointing -> staker2
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith(SolRevert)
-    })
-
-    // This is a happy case test...
-    // I want to make sure it succeeds and values are properly set
-    // this means I should abstract the tests in the happy case test so I can
-    // do it again...
-    it.skip('10. can stake with receive approval', async () => {
-      // receiveApproval
-      raBankedStaker = await getStaker(raStaker.address)
-      raStakerBalance = await spankToken.balanceOf(raStaker.address)
-      raBankedDelegateKey = await spankbank.getStakerFromDelegateKey(raStaker.address)
-      raStaker.delegateKey = raStaker.address
-      raStaker.bootyBase = raStaker.address
-      expect(raStaker.periods).to.be.above(0) // 1. pass
-      expect(raStaker.periods).to.not.be.above(maxPeriods) // 2. pass
-      expect(raStaker.stake).to.be.above(0) // 3. pass
-      raBankedStaker.startingPeriod.should.be.bignumber.equal(0) // 4. pass
-      raBankedStaker.endingPeriod.should.be.bignumber.equal(0) // 5. pass
-      raStakerBalance.should.not.be.bignumber.below(raStaker.stake) // 6. pass
-      expect(raStaker.delegateKey).to.not.be.equal("0x0000000000000000000000000000000000000000") // 7. pass
-      expect(raStaker.bootyBase).to.not.be.equal("0x0000000000000000000000000000000000000000") // 8. pass
-      expect(raBankedDelegateKey).to.be.equal("0x0000000000000000000000000000000000000000") // 9. pass
-
-      // TODO shouldn't call the variable the same name as the function
-      extraData = extraData(raStaker.periods, raStaker.address, raStaker.address)
-      await spankToken.approveAndCall(spankbank.address, raStaker.stake, extraData, {from: raStaker.address})
     })
   })
 })
