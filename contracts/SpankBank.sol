@@ -252,6 +252,9 @@ contract SpankBank {
     function mintBooty() SpankBankIsOpen public {
         updatePeriod();
 
+        // can't mint BOOTY during period 0 - would result in integer underflow
+        require(currentPeriod > 0);
+
         Period storage period = periods[currentPeriod - 1];
         require(!period.mintingComplete, "mintBooty::mintingComplete must be false"); // cant mint BOOTY twice
 

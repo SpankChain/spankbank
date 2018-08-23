@@ -3,6 +3,8 @@
 // 2. test staking with different delegateKey/bootyBase values
 // 3. console logs arent happening - do I need to use promise based assertions?
 // 4. not sure what tests should be done in separate msig file
+// 5. some tests *need* to run in period 0, this can only be done after moving
+//    forward if contracts are redeployed with the same startTime...?
 
 // const {injectInTruffle} = require(`sol-trace`)
 // injectInTruffle(web3, artifacts);
@@ -48,6 +50,28 @@ async function restore(snapshotId) {
       }
     })
   })
+}
+
+async function forceMine() {
+  return await ethRPC.sendAsync({method: `evm_mine`}, (err)=> {});
+}
+
+async function blockTime() {
+  return await web3.eth.getBlock('latest').timestamp
+}
+
+async function moveForwardPeriods(periods) {
+  const blocktimestamp = await blockTime()
+  const goToTime = data.spankbank.periodLength * periods
+  await ethRPC.sendAsync({
+    jsonrpc:'2.0', method: `evm_increaseTime`,
+    params: [goToTime],
+    id: 0
+  }, (err)=> {`error increasing time`});
+  await forceMine()
+  const updatedBlocktimestamp = await blockTime()
+  // console.log('\t(moveForwardPeriods)')
+  return true
 }
 
 function makeExtraData(periodLength, delegateKey, bootyBase) {
@@ -283,7 +307,7 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe('sending fees has two requirements\n\t1. BOOTY amount must be greater than zero\n\t2. transfer complete\n', () => {
+  describe.skip('sending fees has two requirements\n\t1. BOOTY amount must be greater than zero\n\t2. transfer complete\n', () => {
 
     // Note: The initialBootySupply is minted and sent to the SpankBank owner
     // (whoever deployed it) during contract deployment.
@@ -328,6 +352,70 @@ contract('SpankBank', (accounts) => {
 
     it('2.2 transfer failure - sender didnt approve', async () => {
       await spankbank.sendFees(1000, {from: owner}).should.be.rejectedWith(SolRevert)
+    })
+  })
+
+  describe('minting BOOTY has two requirements\n\t1. current period is greater than 0\n\t2. mintingComplete is false for the period\n', () => {
+
+    beforeEach(async () => {
+      snapshotId = await snapshot()
+      // TODO do I still need this current period updating?
+      await spankbank.updatePeriod()
+      currentPeriod = +(await spankbank.currentPeriod())
+    })
+
+    afterEach(async () => {
+      await restore(snapshotId)
+    })
+
+    // TODO this will fail if prior tests move forward periods, must be done in
+    // period 0
+    it('1. minting during period 0', async () => {
+      await spankbank.mintBooty().should.be.rejectedWith(SolRevert)
+    })
+
+    it('0.1 happy case - above target supply -> no new booty', async () => {
+      await moveForwardPeriods(1)
+      await spankbank.mintBooty()
+      const previousPeriod = +(await spankbank.currentPeriod()) - 1
+      const [,,bootyMinted, mintingComplete] = await spankbank.periods(previousPeriod)
+      assert.equal(+bootyMinted, 0)
+      assert.equal(mintingComplete, true)
+
+      const totalBootySupply = await bootyToken.totalSupply.call()
+      assert.equal(+totalBootySupply, data.spankbank.initialBootySupply)
+
+      const spankbankBootyBalance = await bootyToken.balanceOf.call(spankbank.address)
+      assert.equal(+spankbankBootyBalance, 0)
+    })
+
+    it('0.2 happy case - below target supply -> new booty minted', async () => {
+      const fees = data.spankbank.initialBootySupply
+      await bootyToken.approve(spankbank.address, fees, {from: owner})
+      await spankbank.sendFees(fees, {from: owner})
+      await moveForwardPeriods(1)
+      await spankbank.mintBooty()
+      const previousPeriod = +(await spankbank.currentPeriod()) - 1
+      const [,,bootyMinted, mintingComplete] = await spankbank.periods(previousPeriod)
+      assert.equal(+bootyMinted, fees * 20) // fees are burned, so we generate 20x
+      assert.equal(mintingComplete, true)
+
+      const totalBootySupply = await bootyToken.totalSupply.call()
+      assert.equal(+totalBootySupply, fees * 20)
+
+      const spankbankBootyBalance = await bootyToken.balanceOf.call(spankbank.address)
+      assert.equal(+spankbankBootyBalance, fees * 20)
+    })
+
+    it('2. minting already complete', async () => {
+      await moveForwardPeriods(1)
+      await spankbank.mintBooty()
+      const previousPeriod = +(await spankbank.currentPeriod()) - 1
+      const [,,bootyMinted, mintingComplete] = await spankbank.periods(previousPeriod)
+      assert.equal(+bootyMinted, 0)
+      assert.equal(mintingComplete, true)
+
+      await spankbank.mintBooty().should.be.rejectedWith(SolRevert)
     })
   })
 })
