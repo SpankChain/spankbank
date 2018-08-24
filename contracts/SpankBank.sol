@@ -315,32 +315,34 @@ contract SpankBank {
         emit CheckInEvent(stakerAddress);
     }
 
-    function claimBooty(uint256 _period) public {
+    function claimBooty(uint256 claimPeriod) public {
         updatePeriod();
 
-        require(_period < currentPeriod, "claimBooty::_period must be less than currentPeriod"); // can only claim booty for previous periods
+        require(claimPeriod < currentPeriod, "claimBooty::claimPeriod must be less than currentPeriod"); // can only claim booty for previous periods
 
         address stakerAddress = stakerByDelegateKey[msg.sender];
 
         Staker storage staker = stakers[stakerAddress];
 
-        require(!staker.didClaimBooty[_period], "claimBooty::didClaimBooty for period must be false"); // can only claim booty once
+        require(!staker.didClaimBooty[claimPeriod], "claimBooty::didClaimBooty for period must be false"); // can only claim booty once
 
-        staker.didClaimBooty[_period] = true;
+        uint256 stakerSpankPoints = staker.spankPoints[claimPeriod];
+        require(stakerSpankPoints > 0); // only stakers can claim
 
-        Period memory period = periods[_period];
+        staker.didClaimBooty[claimPeriod] = true;
+
+        Period memory period = periods[claimPeriod];
         require(period.mintingComplete);
 
         uint256 bootyMinted = period.bootyMinted;
         uint256 totalSpankPoints = period.totalSpankPoints;
 
         if (totalSpankPoints > 0) {
-            uint256 stakerSpankPoints = staker.spankPoints[_period];
             uint256 bootyOwed = SafeMath.div(SafeMath.mul(stakerSpankPoints, bootyMinted), totalSpankPoints);
 
-          require(bootyToken.transfer(staker.bootyBase, bootyOwed), "claimBooty::bootyToken transfer failure");
+            require(bootyToken.transfer(staker.bootyBase, bootyOwed), "claimBooty::bootyToken transfer failure");
 
-          emit ClaimBootyEvent(stakerAddress, _period, bootyOwed);
+            emit ClaimBootyEvent(stakerAddress, claimPeriod, bootyOwed);
         }
     }
 

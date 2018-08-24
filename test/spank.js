@@ -5,6 +5,8 @@
 // 4. not sure what tests should be done in separate msig file
 // 5. some tests *need* to run in period 0, this can only be done after moving
 //    forward if contracts are redeployed with the same startTime...?
+// 6. test events are properly emitted
+// 7. test spankBankIsOpen modifier
 
 // const {injectInTruffle} = require(`sol-trace`)
 // injectInTruffle(web3, artifacts);
@@ -26,7 +28,10 @@ const SpankBank = artifacts.require('./SpankBank')
 
 const MultiSigWallet = artifacts.require('./MultiSigWallet')
 
+const e18 = 1000000000000000000 // 1e18
+
 const data = require('../data.json')
+const initialBootySupply = data.spankbank.initialBootySupply / e18 // should be 10,000
 
 async function snapshot() {
   return new Promise((accept, reject) => {
@@ -323,39 +328,39 @@ contract('SpankBank', (accounts) => {
     })
 
     it('0. happy case', async () => {
-      await bootyToken.approve(spankbank.address, 1000, {from: owner})
-      await spankbank.sendFees(1000, {from: owner})
+      await bootyToken.approve(spankbank.address, 1000 * e18, {from: owner})
+      await spankbank.sendFees(1000 * e18, {from: owner})
 
-      const totalBootySupply = await bootyToken.totalSupply.call()
-      assert.equal(totalBootySupply, data.spankbank.initialBootySupply - 1000)
+      const totalBootySupply = +(await bootyToken.totalSupply.call()).dividedBy(e18)
+      assert.equal(totalBootySupply, initialBootySupply - 1000)
 
-      const ownerBootyBalance = await bootyToken.balanceOf.call(owner)
-      assert.equal(ownerBootyBalance, data.spankbank.initialBootySupply - 1000)
+      const ownerBootyBalance = +(await bootyToken.balanceOf.call(owner)).dividedBy(e18)
+      assert.equal(ownerBootyBalance, initialBootySupply - 1000)
 
       // TODO will break if we move forward periods beforehand
       const [bootyFees] = await spankbank.periods(currentPeriod)
-      assert.equal(+bootyFees, 1000)
+      assert.equal(+bootyFees.dividedBy(e18), 1000)
     })
 
     it('1. sending zero amount', async () => {
-      await bootyToken.approve(spankbank.address, 1000, {from: owner})
+      await bootyToken.approve(spankbank.address, 1000 * e18, {from: owner})
       await spankbank.sendFees(0, {from: owner}).should.be.rejectedWith(SolRevert)
     })
 
     it('2.1 transfer failure - insufficient balance', async () => {
       // first approve the booty transfer, but then send away all the booty
-      await bootyToken.approve(spankbank.address, 1000, {from: owner})
+      await bootyToken.approve(spankbank.address, 1000 * e18, {from: owner})
       await bootyToken.transfer(accounts[1], data.spankbank.initialBootySupply, {from: owner})
 
-      await spankbank.sendFees(1000, {from: owner}).should.be.rejectedWith(SolRevert)
+      await spankbank.sendFees(1000 * e18, {from: owner}).should.be.rejectedWith(SolRevert)
     })
 
     it('2.2 transfer failure - sender didnt approve', async () => {
-      await spankbank.sendFees(1000, {from: owner}).should.be.rejectedWith(SolRevert)
+      await spankbank.sendFees(1000 * e18, {from: owner}).should.be.rejectedWith(SolRevert)
     })
   })
 
-  describe.skip('minting BOOTY has two requirements\n\t1. current period is greater than 0\n\t2. mintingComplete is false for the period\n', () => {
+  describe('minting BOOTY has two requirements\n\t1. current period is greater than 0\n\t2. mintingComplete is false for the period\n', () => {
 
     beforeEach(async () => {
       snapshotId = await snapshot()
@@ -538,6 +543,158 @@ contract('SpankBank', (accounts) => {
       await spankbank.updatePeriod()
       await spankbank.checkIn(0, {from: staker1.delegateKey})
       await spankbank.checkIn(0, {from: staker1.delegateKey}).should.be.rejectedWith(SolRevert)
+    })
+  })
+
+  describe.only('claiming BOOTY has five requirements\n\t1. claiming period must be less than the current period\n\t2. staker spankpoints > 0 for period\n\t3. staker must not have claimed for claiming period\n\t4. minting of booty must have been completed for the claiming period\n\t5.transfer complete (not verified in tests)\n', () => {
+
+    // TODO may want to test combinations... multiple stakers claim
+    // - claiming period must be less than current period is redundant with
+    //   requiring minting to be complete... minting will only ever be complete
+    //   if we are at least 1 period ahead AND hit mint
+    // - so remove the currentPeriod > claimPeriod requirement
+    // - move mintingComplete requirement up
+
+    beforeEach(async () => {
+      snapshotId = await snapshot()
+
+      staker1 = {
+        address : accounts[1],
+        stake : 100,
+        delegateKey : accounts[1],
+        bootyBase : accounts[1],
+        periods: 12
+      }
+
+      const fees = data.spankbank.initialBootySupply
+
+      await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
+      await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+      // sending 100% of BOOTY as fees
+      await moveForwardPeriods(1)
+      await bootyToken.approve(spankbank.address, fees, {from: owner})
+      await spankbank.sendFees(fees, {from: owner})
+    })
+
+    afterEach(async () => {
+      await restore(snapshotId)
+    })
+
+    it('0. happy case - staker claims booty', async () => {
+      await moveForwardPeriods(1)
+      await spankbank.mintBooty()
+
+      currentPeriod = +(await spankbank.currentPeriod())
+      previousPeriod = currentPeriod - 1
+
+      await spankbank.claimBooty(previousPeriod, { from: staker1.address })
+
+      const didClaimBooty = await spankbank.getDidClaimBooty.call(staker1.address, previousPeriod)
+      assert.ok(didClaimBooty)
+
+      const stakerBootyBalance = await bootyToken.balanceOf.call(staker1.address)
+      assert.equal(+stakerBootyBalance, data.spankbank.initialBootySupply * 20)
+
+      const bankBootyBalance = await bootyToken.balanceOf.call(spankbank.address)
+      assert.equal(+bankBootyBalance, 0)
+    })
+
+
+    it.skip('1. claim period is not less than current period', async () => {
+      await spankbank.stake(staker.stake, staker.periods, staker.address, staker.address, {from : staker.address})
+
+      periodWhenStaked = await spankbank.currentPeriod()
+
+      await moveForwardPeriods(1)
+      await spankbank.mintBooty()
+
+      currentPeriod = await spankbank.currentPeriod()
+      claimPeriod = currentPeriod
+      currentPeriod.should.be.bignumber.equal(claimPeriod) // 1. fail
+
+      didClaimBooty = await spankbank.getDidClaimBooty(staker.address, parseInt(periodWhenStaked))
+      expect(didClaimBooty).to.be.false //2. pass
+
+      perviousPeriod = await getPeriod(currentPeriod-1)
+      expect(perviousPeriod.mintingComplete).to.be.true //3. pass
+
+      bootyTotal = await bootyToken.balanceOf.call(spankbank.address)
+      bootyTotal.should.be.bignumber.above(0) // 4. pass
+
+      await spankbank.claimBooty(claimPeriod, {from: staker.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it.skip('2. staker alraedy claimed booty for period', async () => {
+      await spankbank.stake(alreadyClaimedStaker.stake, alreadyClaimedStaker.periods, alreadyClaimedStaker.address, alreadyClaimedStaker.address, {from : alreadyClaimedStaker.address})
+
+      await moveForwardPeriods(1)
+      await spankbank.updatePeriod()
+      await spankbank.mintBooty()
+
+      currentPeriod = await spankbank.currentPeriod()
+      perviousPeriod = parseInt(currentPeriod) - 1
+      await spankbank.claimBooty(perviousPeriod, {from: alreadyClaimedStaker.address}) // successfully claim
+
+      perviousPeriodData = await getPeriod(currentPeriod-1)
+      expect(perviousPeriod).to.be.below(parseInt(currentPeriod)) // 1. pass
+
+      afterClaimBooty = await spankbank.getDidClaimBooty(alreadyClaimedStaker.address, perviousPeriod)
+      expect(afterClaimBooty).to.be.true
+
+      expect(perviousPeriodData.mintingComplete).to.be.true //3. pass
+
+      bootyTotal = await bootyToken.balanceOf.call(spankbank.address)
+      bootyTotal.should.be.bignumber.above(0) // 4. pass
+
+      await spankbank.claimBooty(perviousPeriod, {from: alreadyClaimedStaker.address}).should.be.rejectedWith(SolRevert) // 2. fail
+    })
+
+    it.skip('3. did not mint for the period', async () => {
+      await moveForwardPeriods(1)
+      await spankbank.updatePeriod()
+
+      await spankbank.stake(mintingNotCompleteStaker.stake, mintingNotCompleteStaker.periods, mintingNotCompleteStaker.address, mintingNotCompleteStaker.address, {from : mintingNotCompleteStaker.address})
+
+      currentPeriod = await spankbank.currentPeriod()
+      perviousPeriodData = await getPeriod(currentPeriod-1)
+
+      expect(perviousPeriod).to.be.below(parseInt(currentPeriod)) // 1. pass
+
+      expect( await spankbank.getDidClaimBooty(mintingNotCompleteStaker.address, parseInt(periodWhenStaked)) ).to.be.false // 2. pass
+
+      expect(perviousPeriodData.mintingComplete).to.be.false // 3. fail
+
+      bootyTotal = await bootyToken.balanceOf.call(spankbank.address)
+      bootyTotal.should.be.bignumber.above(0) // 4. pass
+
+      await spankbank.claimBooty(parseInt(currentPeriod) - 1, {from: alreadyClaimedStaker.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it.skip('SUCCESS!', async () => {
+      await spankbank.updatePeriod()
+      await spankbank.mintBooty()
+
+      await spankbank.stake(claimStaker.stake, claimStaker.periods, claimStaker.address, claimStaker.address, {from : claimStaker.address})
+
+      await moveForwardPeriods(1)
+      await spankbank.mintBooty()
+      await spankbank.updatePeriod()
+
+      currentPeriod = await spankbank.currentPeriod()
+      perviousPeriodData = await getPeriod(parseInt(currentPeriod) - 1)
+
+      expect(perviousPeriod).to.be.below(parseInt(currentPeriod)) // 1. pass
+
+      expect( await spankbank.getDidClaimBooty(claimStaker.address, parseInt(periodWhenStaked)) ).to.be.false // 2. pass
+
+      expect(perviousPeriodData.mintingComplete).to.be.true // 3. pass
+
+      bootyTotal = await bootyToken.balanceOf.call(spankbank.address)
+      bootyTotal.should.be.bignumber.above(0) // 4. pass
+
+      currentPeriod = await spankbank.currentPeriod()
+      await spankbank.claimBooty(parseInt(currentPeriod) - 1, {from: claimStaker.address})
     })
   })
 })
