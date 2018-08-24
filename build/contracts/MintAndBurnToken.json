@@ -432,7 +432,7 @@
         "id": 299,
         "nodeType": "ImportDirective",
         "scope": 495,
-        "sourceUnit": 3329,
+        "sourceUnit": 3420,
         "src": "25:29:3",
         "symbolAliases": [],
         "unitAlias": ""
@@ -468,10 +468,10 @@
               "id": 302,
               "name": "StandardToken",
               "nodeType": "UserDefinedTypeName",
-              "referencedDeclaration": 3328,
+              "referencedDeclaration": 3419,
               "src": "428:13:3",
               "typeDescriptions": {
-                "typeIdentifier": "t_contract$_StandardToken_$3328",
+                "typeIdentifier": "t_contract$_StandardToken_$3419",
                 "typeString": "contract StandardToken"
               }
             },
@@ -500,8 +500,8 @@
         ],
         "contractDependencies": [
           1555,
-          3328,
-          3394
+          3419,
+          3485
         ],
         "contractKind": "contract",
         "documentation": "@title Mintable token\n@dev Simple ERC20 Token example, with mintable token creation\n@dev Issue: * https://github.com/OpenZeppelin/zeppelin-solidity/issues/120\nBased on code by TokenMarketNet: https://github.com/TokenMarketNet/ico/blob/master/contracts/MintableToken.sol",
@@ -510,8 +510,8 @@
         "linearizedBaseContracts": [
           494,
           1555,
-          3328,
-          3394
+          3419,
+          3485
         ],
         "name": "MintAndBurnToken",
         "nodeType": "ContractDefinition",
@@ -693,10 +693,10 @@
                       "name": "require",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [
-                        3412,
-                        3413
+                        3503,
+                        3504
                       ],
-                      "referencedDeclaration": 3412,
+                      "referencedDeclaration": 3503,
                       "src": "596:7:3",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_require_pure$_t_bool_$returns$__$",
@@ -1134,7 +1134,7 @@
                       "name": "totalSupply",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 3332,
+                      "referencedDeclaration": 3423,
                       "src": "2145:11:3",
                       "typeDescriptions": {
                         "typeIdentifier": "t_uint256",
@@ -1165,7 +1165,7 @@
                           "name": "totalSupply",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 3332,
+                          "referencedDeclaration": 3423,
                           "src": "2181:11:3",
                           "typeDescriptions": {
                             "typeIdentifier": "t_uint256",
@@ -1251,7 +1251,7 @@
                         "name": "balances",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 3321,
+                        "referencedDeclaration": 3412,
                         "src": "2199:8:3",
                         "typeDescriptions": {
                           "typeIdentifier": "t_mapping$_t_address_$_t_uint256_$",
@@ -1309,7 +1309,7 @@
                             "name": "balances",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 3321,
+                            "referencedDeclaration": 3412,
                             "src": "2236:8:3",
                             "typeDescriptions": {
                               "typeIdentifier": "t_mapping$_t_address_$_t_uint256_$",
@@ -1581,7 +1581,7 @@
                       "name": "Transfer",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 3385,
+                      "referencedDeclaration": 3476,
                       "src": "2290:8:3",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_event_nonpayable$_t_address_$_t_address_$_t_uint256_$returns$__$",
@@ -2076,7 +2076,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 3409,
+                          "referencedDeclaration": 3500,
                           "src": "3047:3:3",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -2271,7 +2271,7 @@
                             "name": "balances",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 3321,
+                            "referencedDeclaration": 3412,
                             "src": "3153:8:3",
                             "typeDescriptions": {
                               "typeIdentifier": "t_mapping$_t_address_$_t_uint256_$",
@@ -2321,10 +2321,10 @@
                       "name": "require",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [
-                        3412,
-                        3413
+                        3503,
+                        3504
                       ],
-                      "referencedDeclaration": 3412,
+                      "referencedDeclaration": 3503,
                       "src": "3135:7:3",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_require_pure$_t_bool_$returns$__$",
@@ -2365,7 +2365,7 @@
                         "name": "balances",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 3321,
+                        "referencedDeclaration": 3412,
                         "src": "3346:8:3",
                         "typeDescriptions": {
                           "typeIdentifier": "t_mapping$_t_address_$_t_uint256_$",
@@ -2410,7 +2410,7 @@
                             "name": "balances",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 3321,
+                            "referencedDeclaration": 3412,
                             "src": "3376:8:3",
                             "typeDescriptions": {
                               "typeIdentifier": "t_mapping$_t_address_$_t_uint256_$",
@@ -2532,7 +2532,7 @@
                       "name": "totalSupply",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 3332,
+                      "referencedDeclaration": 3423,
                       "src": "3404:11:3",
                       "typeDescriptions": {
                         "typeIdentifier": "t_uint256",
@@ -2550,7 +2550,7 @@
                           "name": "totalSupply",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 3332,
+                          "referencedDeclaration": 3423,
                           "src": "3431:11:3",
                           "typeDescriptions": {
                             "typeIdentifier": "t_uint256",
@@ -2810,7 +2810,7 @@
                       "name": "Transfer",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 3385,
+                      "referencedDeclaration": 3476,
                       "src": "3490:8:3",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_event_nonpayable$_t_address_$_t_address_$_t_uint256_$returns$__$",
@@ -2950,7 +2950,7 @@
         "id": 299,
         "nodeType": "ImportDirective",
         "scope": 495,
-        "sourceUnit": 3329,
+        "sourceUnit": 3420,
         "src": "25:29:3",
         "symbolAliases": [],
         "unitAlias": ""
@@ -2986,10 +2986,10 @@
               "id": 302,
               "name": "StandardToken",
               "nodeType": "UserDefinedTypeName",
-              "referencedDeclaration": 3328,
+              "referencedDeclaration": 3419,
               "src": "428:13:3",
               "typeDescriptions": {
-                "typeIdentifier": "t_contract$_StandardToken_$3328",
+                "typeIdentifier": "t_contract$_StandardToken_$3419",
                 "typeString": "contract StandardToken"
               }
             },
@@ -3018,8 +3018,8 @@
         ],
         "contractDependencies": [
           1555,
-          3328,
-          3394
+          3419,
+          3485
         ],
         "contractKind": "contract",
         "documentation": "@title Mintable token\n@dev Simple ERC20 Token example, with mintable token creation\n@dev Issue: * https://github.com/OpenZeppelin/zeppelin-solidity/issues/120\nBased on code by TokenMarketNet: https://github.com/TokenMarketNet/ico/blob/master/contracts/MintableToken.sol",
@@ -3028,8 +3028,8 @@
         "linearizedBaseContracts": [
           494,
           1555,
-          3328,
-          3394
+          3419,
+          3485
         ],
         "name": "MintAndBurnToken",
         "nodeType": "ContractDefinition",
@@ -3211,10 +3211,10 @@
                       "name": "require",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [
-                        3412,
-                        3413
+                        3503,
+                        3504
                       ],
-                      "referencedDeclaration": 3412,
+                      "referencedDeclaration": 3503,
                       "src": "596:7:3",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_require_pure$_t_bool_$returns$__$",
@@ -3652,7 +3652,7 @@
                       "name": "totalSupply",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 3332,
+                      "referencedDeclaration": 3423,
                       "src": "2145:11:3",
                       "typeDescriptions": {
                         "typeIdentifier": "t_uint256",
@@ -3683,7 +3683,7 @@
                           "name": "totalSupply",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 3332,
+                          "referencedDeclaration": 3423,
                           "src": "2181:11:3",
                           "typeDescriptions": {
                             "typeIdentifier": "t_uint256",
@@ -3769,7 +3769,7 @@
                         "name": "balances",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 3321,
+                        "referencedDeclaration": 3412,
                         "src": "2199:8:3",
                         "typeDescriptions": {
                           "typeIdentifier": "t_mapping$_t_address_$_t_uint256_$",
@@ -3827,7 +3827,7 @@
                             "name": "balances",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 3321,
+                            "referencedDeclaration": 3412,
                             "src": "2236:8:3",
                             "typeDescriptions": {
                               "typeIdentifier": "t_mapping$_t_address_$_t_uint256_$",
@@ -4099,7 +4099,7 @@
                       "name": "Transfer",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 3385,
+                      "referencedDeclaration": 3476,
                       "src": "2290:8:3",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_event_nonpayable$_t_address_$_t_address_$_t_uint256_$returns$__$",
@@ -4594,7 +4594,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 3409,
+                          "referencedDeclaration": 3500,
                           "src": "3047:3:3",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -4789,7 +4789,7 @@
                             "name": "balances",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 3321,
+                            "referencedDeclaration": 3412,
                             "src": "3153:8:3",
                             "typeDescriptions": {
                               "typeIdentifier": "t_mapping$_t_address_$_t_uint256_$",
@@ -4839,10 +4839,10 @@
                       "name": "require",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [
-                        3412,
-                        3413
+                        3503,
+                        3504
                       ],
-                      "referencedDeclaration": 3412,
+                      "referencedDeclaration": 3503,
                       "src": "3135:7:3",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_require_pure$_t_bool_$returns$__$",
@@ -4883,7 +4883,7 @@
                         "name": "balances",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 3321,
+                        "referencedDeclaration": 3412,
                         "src": "3346:8:3",
                         "typeDescriptions": {
                           "typeIdentifier": "t_mapping$_t_address_$_t_uint256_$",
@@ -4928,7 +4928,7 @@
                             "name": "balances",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 3321,
+                            "referencedDeclaration": 3412,
                             "src": "3376:8:3",
                             "typeDescriptions": {
                               "typeIdentifier": "t_mapping$_t_address_$_t_uint256_$",
@@ -5050,7 +5050,7 @@
                       "name": "totalSupply",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 3332,
+                      "referencedDeclaration": 3423,
                       "src": "3404:11:3",
                       "typeDescriptions": {
                         "typeIdentifier": "t_uint256",
@@ -5068,7 +5068,7 @@
                           "name": "totalSupply",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 3332,
+                          "referencedDeclaration": 3423,
                           "src": "3431:11:3",
                           "typeDescriptions": {
                             "typeIdentifier": "t_uint256",
@@ -5328,7 +5328,7 @@
                       "name": "Transfer",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 3385,
+                      "referencedDeclaration": 3476,
                       "src": "3490:8:3",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_event_nonpayable$_t_address_$_t_address_$_t_uint256_$returns$__$",
@@ -5447,6 +5447,6 @@
     "version": "0.4.24+commit.e67f0147.Emscripten.clang"
   },
   "networks": {},
-  "schemaVersion": "2.0.1",
-  "updatedAt": "2018-08-22T21:05:26.460Z"
+  "schemaVersion": "2.0.0",
+  "updatedAt": "2018-08-24T06:24:13.457Z"
 }
