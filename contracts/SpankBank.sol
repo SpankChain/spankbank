@@ -173,8 +173,7 @@ contract SpankBank {
         require(stakePeriods > 0 && stakePeriods <= maxPeriods, "stake:: stake must be between 0 and maxPeriods"); // stake 1-12 (max) periods
         require(spankAmount > 0, "stake::spankAmount must be greater than 0"); // stake must be greater than 0
 
-        // the msg.sender must not have an active staking position
-        // TODO checking that endingPeriod == 0 should cover all periods
+        // the staker must not have an active staking position
         require(stakers[stakerAddress].startingPeriod == 0 && stakers[stakerAddress].endingPeriod == 0, "stake::startingPeriod and endingPeriod must be 0");
 
         // transfer SPANK to this contract - assumes sender has already "allowed" the spankAmount
@@ -367,6 +366,10 @@ contract SpankBank {
         updatePeriod();
 
         require(newAddress != address(0), "splitStake::newAddress must be a non-zero address");
+        require(newDelegateKey != address(0), "splitStake::delegateKey must be a non-zero address");
+        require(newBootyBase != address(0), "splitStake::bootyBase must be a non-zero address");
+        require(stakerByDelegateKey[newDelegateKey] == address(0), "splitStake::delegateKey must not be in use");
+
         require(spankAmount > 0, "splitStake::spankAmount must be greater than 0");
 
         Staker storage staker = stakers[msg.sender];

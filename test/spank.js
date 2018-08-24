@@ -546,13 +546,14 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe.only('claiming BOOTY has four requirements\n\t1. staker spankpoints > 0 for period\n\t2. staker must not have claimed for claiming period\n\t3. minting of booty must have been completed for the claiming period\n\t4.transfer complete (not verified in tests)\n', () => {
+  describe('claiming BOOTY has four requirements\n\t1. staker spankpoints > 0 for period\n\t2. staker must not have claimed for claiming period\n\t3. minting of booty must have been completed for the claiming period\n\t4.transfer complete (not verified in tests)\n', () => {
 
     // TODO add additional happy case tests
     // test proper spank points calculations
     // - multiple stakers with diff stakes / periods / checkins / splitstakes
     // - test proper distribution to bootyBase
     // - claimBooty after stake has expired
+    // - claimBooty after stake is withdrawn
     // - claimBooty after spankbank is closed
 
     // assumes single staker receiving all minted booty
@@ -706,6 +707,161 @@ contract('SpankBank', (accounts) => {
       previousPeriod = +(await spankbank.currentPeriod()) - 1
 
       await spankbank.claimBooty(previousPeriod, { from: staker1.address }).should.be.rejectedWith(SolRevert)
+    })
+  })
+
+  describe.only('splitStake has eight requirements\n\t1. the new staker address is not address(0)\n\t2. the new delegateKey is not address(0)\n\t3. the new bootyBase is not address(0)\n\t4. the new delegateKey is not already in use\n\t5. the stake amount to be split is greater than zero\n\t6. the current period is less than the stakers ending period\n\t7. the amount to be split is less than or equal to staker\'s staker\n\t8. the staker has no spank points for current period (has not yet checked in', () => {
+
+    // TODO test additional happy cases
+    // - different split amounts
+    // - different delgateKey / bootyBase
+    // - multiple splitStakes from same address
+    // - address that is split to can further splitStake to another address
+    // - should work even if spankbank is closed
+    // - should work even if staker is expired
+
+    // TODO edge cases
+    // - splitStake -> 0, checkIn should succeed, but spankpoints should be 0
+
+    // assumes staker1 is the only staker
+    const verifySplitStake = async (staker1, staker2, splitAmount) => {
+      const bankedStaker1 = await spankbank.stakers(staker1.address)
+      const bankedStaker2 = await spankbank.stakers(staker2.address)
+      const [spankStaked1, startingPeriod1, endingPeriod1] = bankedStaker1
+      const [spankStaked2, startingPeriod2, endingPeriod2, delegateKey2, bootyBase2] = bankedStaker2
+
+      // spankStaked should be added/subtracted properly
+      assert.equal(+spankStaked1, staker1.stake - splitAmount)
+      assert.equal(+spankStaked2, splitAmount)
+
+      // starting period should be same as staker1
+      assert.equal(+startingPeriod1, +startingPeriod2)
+
+      // ending period should be same as staker1
+      assert.equal(+endingPeriod1, +endingPeriod2)
+
+      // delegateKey and bootyBase are properly set
+      assert.equal(delegateKey2, staker2.delegateKey)
+      assert.equal(bootyBase2, staker2.bootyBase)
+
+      // spankBank SPANK remains the same
+      const spankbankSpankBalance = await spankToken.balanceOf(spankbank.address)
+      assert.equal(+spankbankSpankBalance, staker1.stake)
+
+      // stakerByDelegateKey -> set
+      const stakerAddress2 = await spankbank.getStakerFromDelegateKey(staker2.delegateKey)
+      assert.equal(stakerAddress2, staker2.address)
+    }
+
+    beforeEach(async () => {
+      snapshotId = await snapshot()
+
+      staker1 = {
+        address : accounts[1],
+        stake : 100,
+        delegateKey : accounts[1],
+        bootyBase : accounts[1],
+        periods: 12
+      }
+
+      staker2 = {
+        address: accounts[2],
+        delegateKey: accounts[2],
+        bootyBase: accounts[2],
+      }
+
+      // we split the entire stake by default
+      splitAmount = staker1.stake
+
+      await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
+      await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+    })
+
+    afterEach(async () => {
+      await restore(snapshotId)
+    })
+
+    it('0.1 splitStake successful', async () => {
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
+      await verifySplitStake(staker1, staker2, splitAmount)
+    })
+
+    it('0.2 splitStake successful - splitAmount is less than total', async () => {
+      splitAmount = staker1.stake / 2
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
+      await verifySplitStake(staker1, staker2, splitAmount)
+    })
+
+    it('0.3 splitStake successful - different delegateKey/bootyBase', async () => {
+      staker2.delegateKey = accounts[3]
+      staker2.bootyBase = accounts[3]
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
+      await verifySplitStake(staker1, staker2, splitAmount)
+    })
+
+    it('0.4. splitStake success - can split during penultimate period', async () => {
+      await moveForwardPeriods(staker1.periods - 1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
+      await verifySplitStake(staker1, staker2, splitAmount)
+    })
+
+    it('1. splitStake fails - new address is 0x0', async () => {
+      staker2.address = "0x0000000000000000000000000000000000000000"
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('2. splitStake fails - new delegateKey is 0x0', async () => {
+      staker2.delegateKey = "0x0000000000000000000000000000000000000000"
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('3. splitStake fails - new bootyBase is 0x0', async () => {
+      staker2.bootyBase = "0x0000000000000000000000000000000000000000"
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('4. splitStake fails - new delegateKey is in use', async () => {
+      staker2.delegateKey = staker1.delegateKey
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('5. splitStake fails - splitAmount must be greater than 0', async () => {
+      splitAmount = 0
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('6. splitStake fails - staker expired', async () => {
+      await moveForwardPeriods(staker1.periods)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('7. splitStake fails - splitAmount exceeds staked spank', async () => {
+      splitAmount = staker1.stake + 1
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('8.1 splitStake fails - staker staked during the same period', async () => {
+      // skip moving forward periods
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('8.2 splitStake fails - staker checked in during the same period', async () => {
+      await moveForwardPeriods(1)
+      await spankbank.checkIn(0, {from: staker1.delegateKey})
+      const nextPeriod = +(await spankbank.currentPeriod()) + 1
+      const spankPoints = await spankbank.getSpankPoints.call(staker1.address, nextPeriod)
+      assert.isAbove(+spankPoints, 0)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
     })
   })
 })
