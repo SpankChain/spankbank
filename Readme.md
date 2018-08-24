@@ -412,3 +412,6 @@ unnecessary upfront planning. The `splitStake` function gives stakers more
 flexibility in deciding how much of their stake to extend over time, and
 reduces friction from the initial staking.
 
+## Testing + Development
+
+For testing instructions, see `test/Readme.md`
