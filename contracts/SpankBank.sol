@@ -182,7 +182,7 @@ contract SpankBank {
 
         stakers[stakerAddress] = Staker(spankAmount, currentPeriod + 1, currentPeriod + stakePeriods, delegateKey, bootyBase);
 
-        _calculateNextPeriodPoints(stakerAddress, stakePeriods);
+        _updateNextPeriodPoints(stakerAddress, stakePeriods);
 
         totalSpankStaked = SafeMath.add(totalSpankStaked, spankAmount);
 
@@ -194,19 +194,22 @@ contract SpankBank {
         emit StakeEvent(stakerAddress);
     }
 
-    function _calculateNextPeriodPoints(address stakerAddress, uint256 stakingPeriods) internal {
+    // Called during stake and checkIn, assumes those functions prevent duplicate calls
+    // for the same staker.
+    function _updateNextPeriodPoints(address stakerAddress, uint256 stakingPeriods) internal {
         Staker storage staker = stakers[stakerAddress];
-        uint256 nextSpankPoints = SafeMath.div(SafeMath.mul(staker.spankStaked, pointsTable[stakingPeriods]), 100);
-        uint256 stakerNextPeriodSpankPoints = staker.spankPoints[currentPeriod + 1];
 
-        if (stakerNextPeriodSpankPoints == 0) {
-            uint256 nextTotalSpankPoints = periods[currentPeriod + 1].totalSpankPoints;
-            nextTotalSpankPoints = SafeMath.add(nextTotalSpankPoints, nextSpankPoints);
-            periods[currentPeriod + 1].totalSpankPoints = nextTotalSpankPoints;
-        }
+        uint256 stakerPoints = SafeMath.div(SafeMath.mul(staker.spankStaked, pointsTable[stakingPeriods]), 100);
 
-        staker.spankPoints[currentPeriod + 1] = nextSpankPoints;
+        // add staker spankpoints to total spankpoints for the next period
+        uint256 totalPoints = periods[currentPeriod + 1].totalSpankPoints;
+        totalPoints = SafeMath.add(totalPoints, stakerPoints);
+        periods[currentPeriod + 1].totalSpankPoints = totalPoints;
 
+        staker.spankPoints[currentPeriod + 1] = stakerPoints;
+
+        // TODO decide what to do about period.totalStakedSpank
+        // probably force users to checkIn in order to vote to close?
         Period storage period = periods[currentPeriod];
         period.totalStakedSpank = SafeMath.add(period.totalStakedSpank, staker.spankStaked);
     }
@@ -294,22 +297,20 @@ contract SpankBank {
 
         Staker storage staker = stakers[stakerAddress];
 
-        require(currentPeriod < staker.endingPeriod);
+        require(currentPeriod < staker.endingPeriod, "checkIn::staker must not have expired");
 
+        require(staker.spankPoints[currentPeriod+1] == 0, "checkIn::staker.spankPoints[nextPeriod] must be 0");
+
+        // If updatedEndingPeriod is 0, don't update the ending period
         if (updatedEndingPeriod > 0) {
-            // TODO I'm not sure we can rely on the staker.endingPeriod to be greater than the
-            // currentPeriod - what if the staker expires but never withdraws their stake?
-            require(updatedEndingPeriod > currentPeriod, "checkIn::updatedEndingPeriod must be greater than currentPeriod");
             require(updatedEndingPeriod > staker.endingPeriod, "checkIn::updatedEndingPeriod must be greater than staker.endingPeriod");
-            require(updatedEndingPeriod <= currentPeriod + maxPeriods, "updatedEndingPeriod must be less than or equal to currentPeriod + maxPeriods");
-            require(staker.spankPoints[currentPeriod+1] == 0);
-
+            require(updatedEndingPeriod <= currentPeriod + maxPeriods, "checkIn::updatedEndingPeriod must be less than or equal to currentPeriod + maxPeriods");
             staker.endingPeriod = updatedEndingPeriod;
-      }
+        }
 
         uint256 stakePeriods = staker.endingPeriod - currentPeriod;
 
-        _calculateNextPeriodPoints(stakerAddress, stakePeriods);
+        _updateNextPeriodPoints(stakerAddress, stakePeriods);
 
         emit CheckInEvent(stakerAddress);
     }
