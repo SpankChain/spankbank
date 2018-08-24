@@ -581,7 +581,7 @@ contract('SpankBank', (accounts) => {
       await restore(snapshotId)
     })
 
-    it('0. happy case - staker claims booty', async () => {
+    it('0.1 happy case - staker claims booty for previous period', async () => {
       await moveForwardPeriods(1)
       await spankbank.mintBooty()
 
@@ -591,6 +591,52 @@ contract('SpankBank', (accounts) => {
       await spankbank.claimBooty(previousPeriod, { from: staker1.address })
 
       const didClaimBooty = await spankbank.getDidClaimBooty.call(staker1.address, previousPeriod)
+      assert.ok(didClaimBooty)
+
+      const stakerBootyBalance = await bootyToken.balanceOf.call(staker1.address)
+      assert.equal(+stakerBootyBalance, data.spankbank.initialBootySupply * 20)
+
+      const bankBootyBalance = await bootyToken.balanceOf.call(spankbank.address)
+      assert.equal(+bankBootyBalance, 0)
+    })
+
+    it('0.2 happy case - staker claims booty for 2 periods ago', async () => {
+      await moveForwardPeriods(1)
+      await spankbank.mintBooty()
+
+      // move forward an extra period
+      await moveForwardPeriods(1)
+      await spankbank.updatePeriod()
+
+      currentPeriod = +(await spankbank.currentPeriod())
+      twoPeriodsAgo = currentPeriod - 2
+
+      await spankbank.claimBooty(twoPeriodsAgo, { from: staker1.address })
+
+      const didClaimBooty = await spankbank.getDidClaimBooty.call(staker1.address, twoPeriodsAgo)
+      assert.ok(didClaimBooty)
+
+      const stakerBootyBalance = await bootyToken.balanceOf.call(staker1.address)
+      assert.equal(+stakerBootyBalance, data.spankbank.initialBootySupply * 20)
+
+      const bankBootyBalance = await bootyToken.balanceOf.call(spankbank.address)
+      assert.equal(+bankBootyBalance, 0)
+    })
+
+    it('0.3 happy case - staker claims booty after checking in', async () => {
+      await moveForwardPeriods(1)
+      await spankbank.mintBooty()
+
+      // move forward an extra period
+      await moveForwardPeriods(1)
+      await spankbank.updatePeriod()
+
+      currentPeriod = +(await spankbank.currentPeriod())
+      twoPeriodsAgo = currentPeriod - 2
+
+      await spankbank.claimBooty(twoPeriodsAgo, { from: staker1.address })
+
+      const didClaimBooty = await spankbank.getDidClaimBooty.call(staker1.address, twoPeriodsAgo)
       assert.ok(didClaimBooty)
 
       const stakerBootyBalance = await bootyToken.balanceOf.call(staker1.address)
