@@ -81,7 +81,7 @@ async function getEventParams(tx, event) {
 }
 
 async function getPeriod(period) {
-  resp = await spankbank.getPeriod(period)
+  resp = await spankbank.periods(period)
   return { period : period, bootyFees : resp[0], totalSpankPoints : resp[1], bootyMinted : resp[2], mintingComplete : resp[3], startTime: resp[4], endTime: resp[5] }
 }
 

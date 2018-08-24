@@ -495,31 +495,6 @@ contract SpankBank {
         return stakers[stakerAddress].votedToClose[period];
     }
 
-    function getPeriod(uint256 period) public view returns (uint256, uint256, uint256, bool, uint256, uint256, uint256, uint256) {
-        Period memory p = periods[period];
-        return (
-            p.bootyFees,
-            p.totalSpankPoints,
-            p.bootyMinted,
-            p.mintingComplete,
-            p.startTime,
-            p.endTime,
-            p.closingVotes,
-            p.totalStakedSpank
-        );
-    }
-
-    function getStaker(address stakerAddress) public view returns (uint256, uint256, uint256, address, address) {
-        Staker memory staker = stakers[stakerAddress];
-        return (
-            staker.spankStaked,
-            staker.startingPeriod,
-            staker.endingPeriod,
-            staker.delegateKey,
-            staker.bootyBase
-        );
-    }
-
     function getStakerFromDelegateKey(address delegateAddress) public view returns (address) {
         return stakerByDelegateKey[delegateAddress];
     }
