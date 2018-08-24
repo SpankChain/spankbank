@@ -234,17 +234,16 @@ contract SpankBank {
 
     function _calculateNextPeriodPoints(address stakerAddress, uint256 stakingPeriods) internal {
         Staker storage staker = stakers[stakerAddress];
-
-        // NOTE: This require should be used instead of the if statement that
-        // was here before, because there's no situations where this should
-        // be called more than once per period.
-        require(staker.spankPoints[currentPeriod + 1] == 0, "spank points have already been calculated for the next period");
-
         uint256 nextSpankPoints = SafeMath.div(SafeMath.mul(staker.spankStaked, pointsTable[stakingPeriods]), 100);
-        staker.spankPoints[currentPeriod + 1] = nextSpankPoints;
+        uint256 stakerNextPeriodSpankPoints = staker.spankPoints[currentPeriod + 1];
 
-        uint256 nextTotalSpankPoints = periods[currentPeriod + 1].totalSpankPoints;
-        periods[currentPeriod + 1].totalSpankPoints = SafeMath.add(nextTotalSpankPoints, nextSpankPoints);
+        if (stakerNextPeriodSpankPoints == 0) {
+            uint256 nextTotalSpankPoints = periods[currentPeriod + 1].totalSpankPoints;
+            nextTotalSpankPoints = SafeMath.add(nextTotalSpankPoints, nextSpankPoints);
+            periods[currentPeriod + 1].totalSpankPoints = nextTotalSpankPoints;
+        }
+
+        staker.spankPoints[currentPeriod + 1] = nextSpankPoints;
 
         Period storage period = periods[currentPeriod];
         period.totalStakedSpank = SafeMath.add(period.totalStakedSpank, staker.spankStaked);
