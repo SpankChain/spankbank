@@ -546,14 +546,26 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe.only('claiming BOOTY has five requirements\n\t1. claiming period must be less than the current period\n\t2. staker spankpoints > 0 for period\n\t3. staker must not have claimed for claiming period\n\t4. minting of booty must have been completed for the claiming period\n\t5.transfer complete (not verified in tests)\n', () => {
+  describe.only('claiming BOOTY has four requirements\n\t1. staker spankpoints > 0 for period\n\t2. staker must not have claimed for claiming period\n\t3. minting of booty must have been completed for the claiming period\n\t4.transfer complete (not verified in tests)\n', () => {
 
-    // TODO may want to test combinations... multiple stakers claim
-    // - claiming period must be less than current period is redundant with
-    //   requiring minting to be complete... minting will only ever be complete
-    //   if we are at least 1 period ahead AND hit mint
-    // - so remove the currentPeriod > claimPeriod requirement
-    // - move mintingComplete requirement up
+    // TODO add additional happy case tests
+    // test proper spank points calculations
+    // - multiple stakers with diff stakes / periods / checkins / splitstakes
+    // - test proper distribution to bootyBase
+    // - claimBooty after stake has expired
+    // - claimBooty after spankbank is closed
+
+    // assumes single staker receiving all minted booty
+    const verifyClaimBooty = async (staker, fees, claimPeriod) => {
+      const didClaimBooty = await spankbank.getDidClaimBooty.call(staker.address, claimPeriod)
+      assert.ok(didClaimBooty)
+
+      const stakerBootyBalance = await bootyToken.balanceOf.call(staker.bootyBase)
+      assert.equal(+stakerBootyBalance, fees * 20)
+
+      const bankBootyBalance = await bootyToken.balanceOf.call(spankbank.address)
+      assert.equal(+bankBootyBalance, 0)
+    }
 
     beforeEach(async () => {
       snapshotId = await snapshot()
@@ -566,12 +578,12 @@ contract('SpankBank', (accounts) => {
         periods: 12
       }
 
-      const fees = data.spankbank.initialBootySupply
+      // sending 100% of BOOTY as fees -> results in booty supply of 20x fees
+      fees = data.spankbank.initialBootySupply
 
       await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
       await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
-      // sending 100% of BOOTY as fees
       await moveForwardPeriods(1)
       await bootyToken.approve(spankbank.address, fees, {from: owner})
       await spankbank.sendFees(fees, {from: owner})
@@ -585,19 +597,10 @@ contract('SpankBank', (accounts) => {
       await moveForwardPeriods(1)
       await spankbank.mintBooty()
 
-      currentPeriod = +(await spankbank.currentPeriod())
-      previousPeriod = currentPeriod - 1
+      previousPeriod = +(await spankbank.currentPeriod()) - 1
 
       await spankbank.claimBooty(previousPeriod, { from: staker1.address })
-
-      const didClaimBooty = await spankbank.getDidClaimBooty.call(staker1.address, previousPeriod)
-      assert.ok(didClaimBooty)
-
-      const stakerBootyBalance = await bootyToken.balanceOf.call(staker1.address)
-      assert.equal(+stakerBootyBalance, data.spankbank.initialBootySupply * 20)
-
-      const bankBootyBalance = await bootyToken.balanceOf.call(spankbank.address)
-      assert.equal(+bankBootyBalance, 0)
+      await verifyClaimBooty(staker1, fees, previousPeriod)
     })
 
     it('0.2 happy case - staker claims booty for 2 periods ago', async () => {
@@ -608,139 +611,101 @@ contract('SpankBank', (accounts) => {
       await moveForwardPeriods(1)
       await spankbank.updatePeriod()
 
-      currentPeriod = +(await spankbank.currentPeriod())
-      twoPeriodsAgo = currentPeriod - 2
+      twoPeriodsAgo = +(await spankbank.currentPeriod()) - 2
 
       await spankbank.claimBooty(twoPeriodsAgo, { from: staker1.address })
 
-      const didClaimBooty = await spankbank.getDidClaimBooty.call(staker1.address, twoPeriodsAgo)
-      assert.ok(didClaimBooty)
-
-      const stakerBootyBalance = await bootyToken.balanceOf.call(staker1.address)
-      assert.equal(+stakerBootyBalance, data.spankbank.initialBootySupply * 20)
-
-      const bankBootyBalance = await bootyToken.balanceOf.call(spankbank.address)
-      assert.equal(+bankBootyBalance, 0)
+      await verifyClaimBooty(staker1, fees, twoPeriodsAgo)
     })
 
     it('0.3 happy case - staker claims booty after checking in', async () => {
+      // staker1 checks in before moving to next period
+      // this allows the staker to withdraw 2 periods from now
+      await spankbank.checkIn(0, {from: staker1.delegateKey})
+
       await moveForwardPeriods(1)
       await spankbank.mintBooty()
 
-      // move forward an extra period
+      previousPeriod = +(await spankbank.currentPeriod()) - 1
+
+      await spankbank.claimBooty(previousPeriod, { from: staker1.address })
+
+      // staker1 sends fees (all the booty the just received)
+      // assumes bootyBase is the same as address
+      await bootyToken.approve(spankbank.address, fees, {from: staker1.address})
+      await spankbank.sendFees(fees, {from: staker1.address})
+
       await moveForwardPeriods(1)
-      await spankbank.updatePeriod()
+      await spankbank.mintBooty()
+
+      previousPeriod = +(await spankbank.currentPeriod()) - 1
+
+      // claim amount should be equal to fees, because total should be 20x
+      // 20x fees -> burn fees -> total is 19x fees -> 1x fees should be minted
+      // final staker booty balance should still be 20x fees
+      await spankbank.claimBooty(previousPeriod, { from: staker1.address })
+      await verifyClaimBooty(staker1, fees, previousPeriod)
+    })
+
+    it('1.1 staker failed to check in, claimBooty should fail', async () => {
+      // Same as previous test, but the staker does not check in
+
+      await moveForwardPeriods(1)
+      await spankbank.mintBooty()
+
+      previousPeriod = +(await spankbank.currentPeriod()) - 1
+
+      await spankbank.claimBooty(previousPeriod, { from: staker1.address })
+
+      // staker1 sends fees (all the booty the just received)
+      // assumes bootyBase is the same as address
+      await bootyToken.approve(spankbank.address, fees, {from: staker1.address})
+      await spankbank.sendFees(fees, {from: staker1.address})
+
+      await moveForwardPeriods(1)
+      await spankbank.mintBooty()
+
+      previousPeriod = +(await spankbank.currentPeriod()) - 1
+
+      // claim amount should be equal to fees, because total should be 20x
+      // 20x fees -> burn fees -> total is 19x fees -> 1x fees should be minted
+      // final staker booty balance should still be 20x fees
+      await spankbank.claimBooty(previousPeriod, { from: staker1.address }).should.be.rejectedWith(SolRevert)
+    })
+
+    it('1.2 non-staker attempts to claimBooty should fail', async () => {
+      await moveForwardPeriods(1)
+      await spankbank.mintBooty()
+
+      const staker2 = {
+        address: accounts[2]
+      }
+
+      previousPeriod = +(await spankbank.currentPeriod()) - 1
+
+      await spankbank.claimBooty(previousPeriod, { from: staker2.address }).should.be.rejectedWith(SolRevert)
+    })
+
+    it('2. staker already claimed booty for period', async () => {
+      await moveForwardPeriods(1)
+      await spankbank.mintBooty()
 
       currentPeriod = +(await spankbank.currentPeriod())
-      twoPeriodsAgo = currentPeriod - 2
+      previousPeriod = currentPeriod - 1
 
-      await spankbank.claimBooty(twoPeriodsAgo, { from: staker1.address })
+      await spankbank.claimBooty(previousPeriod, { from: staker1.address })
+      await verifyClaimBooty(staker1, fees, previousPeriod)
 
-      const didClaimBooty = await spankbank.getDidClaimBooty.call(staker1.address, twoPeriodsAgo)
-      assert.ok(didClaimBooty)
-
-      const stakerBootyBalance = await bootyToken.balanceOf.call(staker1.address)
-      assert.equal(+stakerBootyBalance, data.spankbank.initialBootySupply * 20)
-
-      const bankBootyBalance = await bootyToken.balanceOf.call(spankbank.address)
-      assert.equal(+bankBootyBalance, 0)
+      await spankbank.claimBooty(previousPeriod, { from: staker1.address }).should.be.rejectedWith(SolRevert)
     })
 
-
-    it.skip('1. claim period is not less than current period', async () => {
-      await spankbank.stake(staker.stake, staker.periods, staker.address, staker.address, {from : staker.address})
-
-      periodWhenStaked = await spankbank.currentPeriod()
-
+    it('3. did not mint for the period', async () => {
       await moveForwardPeriods(1)
-      await spankbank.mintBooty()
+      // skipping minting
 
-      currentPeriod = await spankbank.currentPeriod()
-      claimPeriod = currentPeriod
-      currentPeriod.should.be.bignumber.equal(claimPeriod) // 1. fail
+      previousPeriod = +(await spankbank.currentPeriod()) - 1
 
-      didClaimBooty = await spankbank.getDidClaimBooty(staker.address, parseInt(periodWhenStaked))
-      expect(didClaimBooty).to.be.false //2. pass
-
-      perviousPeriod = await getPeriod(currentPeriod-1)
-      expect(perviousPeriod.mintingComplete).to.be.true //3. pass
-
-      bootyTotal = await bootyToken.balanceOf.call(spankbank.address)
-      bootyTotal.should.be.bignumber.above(0) // 4. pass
-
-      await spankbank.claimBooty(claimPeriod, {from: staker.address}).should.be.rejectedWith(SolRevert)
-    })
-
-    it.skip('2. staker alraedy claimed booty for period', async () => {
-      await spankbank.stake(alreadyClaimedStaker.stake, alreadyClaimedStaker.periods, alreadyClaimedStaker.address, alreadyClaimedStaker.address, {from : alreadyClaimedStaker.address})
-
-      await moveForwardPeriods(1)
-      await spankbank.updatePeriod()
-      await spankbank.mintBooty()
-
-      currentPeriod = await spankbank.currentPeriod()
-      perviousPeriod = parseInt(currentPeriod) - 1
-      await spankbank.claimBooty(perviousPeriod, {from: alreadyClaimedStaker.address}) // successfully claim
-
-      perviousPeriodData = await getPeriod(currentPeriod-1)
-      expect(perviousPeriod).to.be.below(parseInt(currentPeriod)) // 1. pass
-
-      afterClaimBooty = await spankbank.getDidClaimBooty(alreadyClaimedStaker.address, perviousPeriod)
-      expect(afterClaimBooty).to.be.true
-
-      expect(perviousPeriodData.mintingComplete).to.be.true //3. pass
-
-      bootyTotal = await bootyToken.balanceOf.call(spankbank.address)
-      bootyTotal.should.be.bignumber.above(0) // 4. pass
-
-      await spankbank.claimBooty(perviousPeriod, {from: alreadyClaimedStaker.address}).should.be.rejectedWith(SolRevert) // 2. fail
-    })
-
-    it.skip('3. did not mint for the period', async () => {
-      await moveForwardPeriods(1)
-      await spankbank.updatePeriod()
-
-      await spankbank.stake(mintingNotCompleteStaker.stake, mintingNotCompleteStaker.periods, mintingNotCompleteStaker.address, mintingNotCompleteStaker.address, {from : mintingNotCompleteStaker.address})
-
-      currentPeriod = await spankbank.currentPeriod()
-      perviousPeriodData = await getPeriod(currentPeriod-1)
-
-      expect(perviousPeriod).to.be.below(parseInt(currentPeriod)) // 1. pass
-
-      expect( await spankbank.getDidClaimBooty(mintingNotCompleteStaker.address, parseInt(periodWhenStaked)) ).to.be.false // 2. pass
-
-      expect(perviousPeriodData.mintingComplete).to.be.false // 3. fail
-
-      bootyTotal = await bootyToken.balanceOf.call(spankbank.address)
-      bootyTotal.should.be.bignumber.above(0) // 4. pass
-
-      await spankbank.claimBooty(parseInt(currentPeriod) - 1, {from: alreadyClaimedStaker.address}).should.be.rejectedWith(SolRevert)
-    })
-
-    it.skip('SUCCESS!', async () => {
-      await spankbank.updatePeriod()
-      await spankbank.mintBooty()
-
-      await spankbank.stake(claimStaker.stake, claimStaker.periods, claimStaker.address, claimStaker.address, {from : claimStaker.address})
-
-      await moveForwardPeriods(1)
-      await spankbank.mintBooty()
-      await spankbank.updatePeriod()
-
-      currentPeriod = await spankbank.currentPeriod()
-      perviousPeriodData = await getPeriod(parseInt(currentPeriod) - 1)
-
-      expect(perviousPeriod).to.be.below(parseInt(currentPeriod)) // 1. pass
-
-      expect( await spankbank.getDidClaimBooty(claimStaker.address, parseInt(periodWhenStaked)) ).to.be.false // 2. pass
-
-      expect(perviousPeriodData.mintingComplete).to.be.true // 3. pass
-
-      bootyTotal = await bootyToken.balanceOf.call(spankbank.address)
-      bootyTotal.should.be.bignumber.above(0) // 4. pass
-
-      currentPeriod = await spankbank.currentPeriod()
-      await spankbank.claimBooty(parseInt(currentPeriod) - 1, {from: claimStaker.address})
+      await spankbank.claimBooty(previousPeriod, { from: staker1.address }).should.be.rejectedWith(SolRevert)
     })
   })
 })

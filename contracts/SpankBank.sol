@@ -318,7 +318,8 @@ contract SpankBank {
     function claimBooty(uint256 claimPeriod) public {
         updatePeriod();
 
-        require(claimPeriod < currentPeriod, "claimBooty::claimPeriod must be less than currentPeriod"); // can only claim booty for previous periods
+        Period memory period = periods[claimPeriod];
+        require(period.mintingComplete, "claimBooty:: booty has not been minted for the claim period");
 
         address stakerAddress = stakerByDelegateKey[msg.sender];
 
@@ -331,19 +332,14 @@ contract SpankBank {
 
         staker.didClaimBooty[claimPeriod] = true;
 
-        Period memory period = periods[claimPeriod];
-        require(period.mintingComplete);
-
         uint256 bootyMinted = period.bootyMinted;
         uint256 totalSpankPoints = period.totalSpankPoints;
 
-        if (totalSpankPoints > 0) {
-            uint256 bootyOwed = SafeMath.div(SafeMath.mul(stakerSpankPoints, bootyMinted), totalSpankPoints);
+        uint256 bootyOwed = SafeMath.div(SafeMath.mul(stakerSpankPoints, bootyMinted), totalSpankPoints);
 
-            require(bootyToken.transfer(staker.bootyBase, bootyOwed), "claimBooty::bootyToken transfer failure");
+        require(bootyToken.transfer(staker.bootyBase, bootyOwed), "claimBooty::bootyToken transfer failure");
 
-            emit ClaimBootyEvent(stakerAddress, claimPeriod, bootyOwed);
-        }
+        emit ClaimBootyEvent(stakerAddress, claimPeriod, bootyOwed);
     }
 
     function withdrawStake() public {
@@ -434,13 +430,6 @@ contract SpankBank {
 
         emit UpdateBootyBaseEvent(msg.sender);
     }
-
-    // TODO as-is, the contract doesnt allow for dynamic stake allocation - you can only extend
-    // the entire stake, or withdraw the entire stake. Even if you could withdraw partial stake,
-    // you would still be making the decision to extend the entire stake, or not.
-    // - allow staker to split stake (or move some fraction under a new address)
-    // - accept that you have to extend the entire stake, and plan ahead accordingly
-    //   - split the stake up into several portions, and decide to extend / not each portion
 
     function getSpankPoints(address stakerAddress, uint256 period) public view returns (uint256)  {
         return stakers[stakerAddress].spankPoints[period];
