@@ -347,14 +347,14 @@ contract SpankBank {
 
         require(currentPeriod > staker.endingPeriod, "withdrawStake::currentPeriod must be greater than staker.endingPeriod");
 
-        spankToken.transfer(msg.sender, staker.spankStaked);
-
-        uint256 totalSpankToWithdraw = staker.spankStaked;
+        uint256 spankToWithdraw = staker.spankStaked;
 
         totalSpankStaked = SafeMath.sub(totalSpankStaked, staker.spankStaked);
         staker.spankStaked = 0;
 
-        emit WithdrawStakeEvent(msg.sender, totalSpankToWithdraw);
+        spankToken.transfer(msg.sender, spankToWithdraw);
+
+        emit WithdrawStakeEvent(msg.sender, spankToWithdraw);
     }
 
     function splitStake(address newAddress, address newDelegateKey, address newBootyBase, uint256 spankAmount) public {

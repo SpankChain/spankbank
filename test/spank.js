@@ -1031,7 +1031,7 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe.only('votetoClose has four requires\n\t1. staker spank is greater than zero\n\t2. current period < ending period\n\t3. staker has not already voted to close in current period\n\t4. spankbank is not closed, \n', () => {
+  describe('votetoClose has four requires\n\t1. staker spank is greater than zero\n\t2. current period < ending period\n\t3. staker has not already voted to close in current period\n\t4. spankbank is not closed, \n', () => {
 
     beforeEach(async () => {
       snapshotId = await snapshot()
@@ -1168,6 +1168,106 @@ contract('SpankBank', (accounts) => {
     it('4. voteToClose fails - spankbank is closed', async () => {
       await spankbank.voteToClose({from : staker1.address})
       await spankbank.voteToClose({from : staker2.address}).should.be.rejectedWith(SolRevert)
+    })
+  })
+
+  describe.only('withdraw stake has one requirement\n\t1. current period must be greater than staker ending period\n', () => {
+
+    beforeEach(async () => {
+      snapshotId = await snapshot()
+
+      staker1 = {
+        address : accounts[1],
+        stake : 100,
+        delegateKey : accounts[1],
+        bootyBase : accounts[1],
+        periods: 12
+      }
+
+      await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
+      await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+    })
+
+    afterEach(async () => {
+      await restore(snapshotId)
+    })
+
+    it('0.1 withdrawStake success', async () => {
+      await moveForwardPeriods(staker1.periods + 1)
+      await spankbank.withdrawStake({from: staker1.address})
+
+      const stakerSpankBalance = +(await spankToken.balanceOf.call(staker1.address))
+      assert.equal(stakerSpankBalance, staker1.stake)
+
+      const [spankStaked1] = await spankbank.stakers(staker1.address)
+      assert.equal(+spankStaked1, 0)
+
+      const bankSpankBalance = +(await spankToken.balanceOf.call(spankbank.address))
+      assert.equal(bankSpankBalance, 0)
+
+      const totalSpankStaked = +(await spankbank.totalSpankStaked.call())
+      assert.equal(totalSpankStaked, 0)
+    })
+
+    it('0.2 withdrawStake success - after spankbank closed', async () => {
+      await spankbank.voteToClose({from : staker1.address})
+      await spankbank.withdrawStake({from: staker1.address})
+
+      const stakerSpankBalance = +(await spankToken.balanceOf.call(staker1.address))
+      assert.equal(stakerSpankBalance, staker1.stake)
+
+      const [spankStaked1] = await spankbank.stakers(staker1.address)
+      assert.equal(+spankStaked1, 0)
+
+      const bankSpankBalance = +(await spankToken.balanceOf.call(spankbank.address))
+      assert.equal(bankSpankBalance, 0)
+
+      const totalSpankStaked = +(await spankbank.totalSpankStaked.call())
+      assert.equal(totalSpankStaked, 0)
+    })
+
+    it('0.3 withdrawStake success - after splitstake', async () => {
+      const staker2 = {
+        address: accounts[2],
+        delegateKey: accounts[2],
+        bootyBase: accounts[2]
+      }
+
+      await moveForwardPeriods(1)
+
+      // split 100% of stake
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, staker1.stake, {from: staker1.address})
+
+      await moveForwardPeriods(staker1.periods)
+
+      await spankbank.withdrawStake({from: staker1.address})
+      await spankbank.withdrawStake({from: staker2.address})
+
+      // staker1 should withdraw 0 spank because all of it was split
+      const staker1_SpankBalance = +(await spankToken.balanceOf.call(staker1.address))
+      assert.equal(staker1_SpankBalance, 0)
+
+      // staker2 has all of staker1's spank
+      const staker2_SpankBalance = +(await spankToken.balanceOf.call(staker2.address))
+      assert.equal(staker2_SpankBalance, staker1.stake)
+
+      // spankStaked for both should be 0
+      const [spankStaked1] = await spankbank.stakers(staker1.address)
+      assert.equal(+spankStaked1, 0)
+      const [spankStaked2] = await spankbank.stakers(staker2.address)
+      assert.equal(+spankStaked2, 0)
+
+      const bankSpankBalance = +(await spankToken.balanceOf.call(spankbank.address))
+      assert.equal(bankSpankBalance, 0)
+
+      const totalSpankStaked = +(await spankbank.totalSpankStaked.call())
+      assert.equal(totalSpankStaked, 0)
+    })
+
+    it('1. withdrawStake fail - staker not yet expired', async () => {
+      await moveForwardPeriods(staker1.periods)
+      await spankbank.withdrawStake({from: staker1.address}).should.be.rejectedWith(SolRevert)
     })
   })
 })
