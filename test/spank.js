@@ -65,6 +65,12 @@ async function blockTime() {
   return await web3.eth.getBlock('latest').timestamp
 }
 
+// Note: this will move forward the timestamp but *not* the currentPeriod
+// any write operation to the contract will implicitely call updatePeriod
+// to get the period after moving forward, we call:
+// await moveForwardPeriods(X)
+// await spankbank.updatePeriod()
+// const currentPeriod = await spankbank.currentPeriod.call()
 async function moveForwardPeriods(periods) {
   const blocktimestamp = await blockTime()
   const goToTime = data.spankbank.periodLength * periods
@@ -163,6 +169,38 @@ contract('SpankBank', (accounts) => {
     owner = accounts[0]
   })
 
+  beforeEach(async () => {
+    snapshotId = await snapshot()
+
+    staker1 = {
+      address : accounts[1],
+      stake : 100,
+      delegateKey : accounts[1],
+      bootyBase : accounts[1],
+      periods: 12
+    }
+
+    staker2 = {
+      address : accounts[2],
+      stake : 100,
+      delegateKey : accounts[2],
+      bootyBase : accounts[2],
+      periods: 12
+    }
+
+    staker3 = {
+      address : accounts[3],
+      stake : 100,
+      delegateKey : accounts[3],
+      bootyBase : accounts[3],
+      periods: 12
+    }
+  })
+
+  afterEach(async () => {
+    await restore(snapshotId)
+  })
+
   describe('SpankBank contract deployment', () => {
     it('parameters are initialized correctly', async () => {
       const currentPeriod = +(await spankbank.currentPeriod.call())
@@ -197,23 +235,11 @@ contract('SpankBank', (accounts) => {
 
   describe('Staking has nine requirements (counting logical AND requirements individually when possible).\n\t1. stake period greater than zero \n\t2. stake period less than or equal to maxPeriods \n\t3. stake greater than zero \n\t4. startingPeriod is zero \n\t5. endingPeriod is zero \n\t6. transfer complete \n\t7. delegateKey is not 0x0 \n\t8. bootyBase is not 0x0 \n\t9. delegateKey -> stakerAddress is 0x0\n', () => {
 
+    // TODO test staking after moving forward periods
+
     beforeEach(async () => {
-      snapshotId = await snapshot()
-
-      staker1 = {
-        address : accounts[1],
-        stake : 100,
-        delegateKey : accounts[1],
-        bootyBase : accounts[1],
-        periods: 12
-      }
-
       await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
       await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
-    })
-
-    afterEach(async () => {
-      await restore(snapshotId)
     })
 
     it('0.1 happy case - stake directly', async () => {
@@ -286,26 +312,16 @@ contract('SpankBank', (accounts) => {
 
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith(SolRevert)
 
-      // TODO test staking after moving forward periods?
     })
 
     it('6.1 transfer failure - insufficient balance', async () => {
-      await spankToken.transfer(owner, 100, {from: staker1.address})
+      await spankToken.transfer(owner, staker1.stake, {from: staker1.address})
 
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith(SolRevert)
     })
 
     it('6.2 transfer failure - staker never approved', async () => {
-      // TODO use constructor?
-      staker2 = {
-        address : accounts[2],
-        stake : 100,
-        delegateKey : accounts[2],
-        bootyBase : accounts[2],
-        periods: 12
-      }
-
-      await spankToken.transfer(staker2.address, 100, {from: owner})
+      await spankToken.transfer(staker2.address, staker2.stake, {from: owner})
 
       await spankbank.stake(staker2.stake, staker2.periods, staker2.delegateKey, staker2.bootyBase, {from : staker2.address}).should.be.rejectedWith(SolRevert)
     })
@@ -323,17 +339,9 @@ contract('SpankBank', (accounts) => {
     })
 
     it('9. delegateKey has already been used', async () => {
-      staker2 = {
-        address : accounts[2],
-        stake : 100,
-        delegateKey : accounts[2],
-        bootyBase : accounts[2],
-        periods: 12
-      }
-
       staker1.delegateKey = staker2.delegateKey
 
-      await spankToken.transfer(staker2.address, 100, {from: owner})
+      await spankToken.transfer(staker2.address, staker2.stake, {from: owner})
       await spankToken.approve(spankbank.address, staker2.stake, {from: staker2.address})
 
       staker2Address = await spankbank.getStakerFromDelegateKey(staker2.delegateKey)
@@ -356,13 +364,8 @@ contract('SpankBank', (accounts) => {
     // (whoever deployed it) during contract deployment.
 
     beforeEach(async () => {
-      snapshotId = await snapshot()
       await spankbank.updatePeriod()
       currentPeriod = +(await spankbank.currentPeriod())
-    })
-
-    afterEach(async () => {
-      await restore(snapshotId)
     })
 
     it('0. happy case', async () => {
@@ -401,14 +404,8 @@ contract('SpankBank', (accounts) => {
   describe('minting BOOTY has two requirements\n\t1. current period is greater than 0\n\t2. mintingComplete is false for the period\n', () => {
 
     beforeEach(async () => {
-      snapshotId = await snapshot()
-      // TODO do I still need this current period updating?
       await spankbank.updatePeriod()
       currentPeriod = +(await spankbank.currentPeriod())
-    })
-
-    afterEach(async () => {
-      await restore(snapshotId)
     })
 
     // TODO this will fail if prior tests move forward periods, must be done in
@@ -467,23 +464,9 @@ contract('SpankBank', (accounts) => {
     // Note: if periods = 1, users can not checkIn, they must withdraw and re-stake
 
     beforeEach(async () => {
-      snapshotId = await snapshot()
-
-      staker1 = {
-        address : accounts[1],
-        stake : 100,
-        delegateKey : accounts[1],
-        bootyBase : accounts[1],
-        periods: 12
-      }
-
       await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
       await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
       currentPeriod = +(await spankbank.currentPeriod())
-    })
-
-    afterEach(async () => {
-      await restore(snapshotId)
     })
 
     it('0.1 happy case - dont update endingPeriod', async () => {
@@ -607,16 +590,6 @@ contract('SpankBank', (accounts) => {
     }
 
     beforeEach(async () => {
-      snapshotId = await snapshot()
-
-      staker1 = {
-        address : accounts[1],
-        stake : 100,
-        delegateKey : accounts[1],
-        bootyBase : accounts[1],
-        periods: 12
-      }
-
       // sending 100% of BOOTY as fees -> results in booty supply of 20x fees
       fees = data.spankbank.initialBootySupply
 
@@ -626,10 +599,6 @@ contract('SpankBank', (accounts) => {
       await moveForwardPeriods(1)
       await bootyToken.approve(spankbank.address, fees, {from: owner})
       await spankbank.sendFees(fees, {from: owner})
-    })
-
-    afterEach(async () => {
-      await restore(snapshotId)
     })
 
     it('0.1 happy case - staker claims booty for previous period', async () => {
@@ -716,10 +685,6 @@ contract('SpankBank', (accounts) => {
       await moveForwardPeriods(1)
       await spankbank.mintBooty()
 
-      const staker2 = {
-        address: accounts[2]
-      }
-
       previousPeriod = +(await spankbank.currentPeriod()) - 1
 
       await spankbank.claimBooty(previousPeriod, { from: staker2.address }).should.be.rejectedWith(SolRevert)
@@ -786,32 +751,12 @@ contract('SpankBank', (accounts) => {
     }
 
     beforeEach(async () => {
-      snapshotId = await snapshot()
-
-      staker1 = {
-        address : accounts[1],
-        stake : 100,
-        delegateKey : accounts[1],
-        bootyBase : accounts[1],
-        periods: 12
-      }
-
-      staker2 = {
-        address: accounts[2],
-        delegateKey: accounts[2],
-        bootyBase: accounts[2],
-      }
-
       // we split the entire stake by default
       splitAmount = staker1.stake
 
       await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
       await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
-    })
-
-    afterEach(async () => {
-      await restore(snapshotId)
     })
 
     it('0.1 splitStake successful', async () => {
@@ -848,12 +793,6 @@ contract('SpankBank', (accounts) => {
       await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
       await verifySplitStake(staker1, staker2, splitAmount)
 
-      const staker3 = {
-        address: accounts[3],
-        delegateKey: accounts[3],
-        bootyBase: accounts[3]
-      }
-
       // verifySplitStake expects staker1.stake to reflect onchain staked spank
       const [spankStaked1] = await spankbank.stakers(staker1.address)
       staker1.stake = +spankStaked1
@@ -868,12 +807,6 @@ contract('SpankBank', (accounts) => {
       await moveForwardPeriods(1)
       await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
       await verifySplitStake(staker1, staker2, splitAmount)
-
-      const staker3 = {
-        address: accounts[3],
-        delegateKey: accounts[3],
-        bootyBase: accounts[3]
-      }
 
       // verifySplitStake expects staker1.stake (in that function context) to reflect onchain staked spank
       const [spankStaked2] = await spankbank.stakers(staker2.address)
@@ -965,25 +898,11 @@ contract('SpankBank', (accounts) => {
   describe('updating delegate key has three requirements\n\t1. new delegate key address is not address(0)\n\t2. delegate key is not already in use\n\t3. staker has a valid delegate key to update\n', () => {
 
     beforeEach(async () => {
-      snapshotId = await snapshot()
-
-      staker1 = {
-        address : accounts[1],
-        stake : 100,
-        delegateKey : accounts[1],
-        bootyBase : accounts[1],
-        periods: 12
-      }
-
       newDelegateKey = accounts[2]
 
       await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
       await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
-    })
-
-    afterEach(async () => {
-      await restore(snapshotId)
     })
 
     it('0. successfully update delegateKey', async () => {
@@ -1011,10 +930,6 @@ contract('SpankBank', (accounts) => {
     })
 
     it('3. non-stakers cant update delegate keys', async () => {
-      const staker2 = {
-        address: accounts[2]
-      }
-
       await spankbank.updateDelegateKey(newDelegateKey, {from: staker2.address}).should.be.rejectedWith(SolRevert)
     })
   })
@@ -1022,25 +937,11 @@ contract('SpankBank', (accounts) => {
   describe('updating booty base has one requirement\n\t1. staker must have SPANK staked', () => {
 
     beforeEach(async () => {
-      snapshotId = await snapshot()
-
-      staker1 = {
-        address : accounts[1],
-        stake : 100,
-        delegateKey : accounts[1],
-        bootyBase : accounts[1],
-        periods: 12
-      }
-
       newBootyBase = accounts[2]
 
       await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
       await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
-    })
-
-    afterEach(async () => {
-      await restore(snapshotId)
     })
 
     it('0. successfully update bootyBase', async () => {
@@ -1063,23 +964,9 @@ contract('SpankBank', (accounts) => {
   describe('votetoClose has four requires\n\t1. staker spank is greater than zero\n\t2. current period < ending period\n\t3. staker has not already voted to close in current period\n\t4. spankbank is not closed, \n', () => {
 
     beforeEach(async () => {
-      snapshotId = await snapshot()
-
-      staker1 = {
-        address : accounts[1],
-        stake : 100,
-        delegateKey : accounts[1],
-        bootyBase : accounts[1],
-        periods: 12
-      }
-
-      staker2 = {
-        address : accounts[2],
-        stake : 50,
-        delegateKey : accounts[2],
-        bootyBase : accounts[2],
-        periods: 12
-      }
+      // reducing this so if staker1 and staker2 are both staking, staker2 can
+      // voteToClose without hitting the closingTrigger
+      staker2.stake = 50
 
       await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
       await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
@@ -1090,10 +977,6 @@ contract('SpankBank', (accounts) => {
       await spankbank.stake(staker2.stake, staker2.periods, staker2.delegateKey, staker2.bootyBase, {from : staker2.address})
 
       currentPeriod = +(await spankbank.currentPeriod())
-    })
-
-    afterEach(async () => {
-      await restore(snapshotId)
     })
 
     it('0.1 voteToClose success - closingTrigger reached', async () => {
@@ -1160,20 +1043,10 @@ contract('SpankBank', (accounts) => {
     })
 
     it('1.1 voteToClose fails - staker spank is greater than zero - non-staker', async () => {
-      const staker3 = {
-        address: accounts[3]
-      }
-
       await spankbank.voteToClose({from : staker3.address}).should.be.rejectedWith(SolRevert)
     })
 
     it('1.2 voteToClose fails - staker spank is greater than zero - splitStaked 100% of stake', async () => {
-      const staker3 = {
-        address: accounts[3],
-        delegateKey: accounts[3],
-        bootyBase: accounts[3]
-      }
-
       await moveForwardPeriods(1)
       await spankbank.splitStake(staker3.address, staker3.delegateKey, staker3.bootyBase, staker1.stake, {from: staker1.address})
 
@@ -1202,23 +1075,9 @@ contract('SpankBank', (accounts) => {
   describe('withdraw stake has one requirement\n\t1. current period must be greater than staker ending period\n', () => {
 
     beforeEach(async () => {
-      snapshotId = await snapshot()
-
-      staker1 = {
-        address : accounts[1],
-        stake : 100,
-        delegateKey : accounts[1],
-        bootyBase : accounts[1],
-        periods: 12
-      }
-
       await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
       await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
-    })
-
-    afterEach(async () => {
-      await restore(snapshotId)
     })
 
     it('0.1 withdrawStake success', async () => {
@@ -1256,12 +1115,6 @@ contract('SpankBank', (accounts) => {
     })
 
     it('0.3 withdrawStake success - after splitstake', async () => {
-      const staker2 = {
-        address: accounts[2],
-        delegateKey: accounts[2],
-        bootyBase: accounts[2]
-      }
-
       await moveForwardPeriods(1)
 
       // split 100% of stake
