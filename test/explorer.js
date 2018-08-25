@@ -104,21 +104,23 @@ contract('SpankBank::integration', (accounts) => {
     { account: 'stakeMintClaim', action: 'approve' },
 
     { account: 'everything', action: 'stake' },
-    { account: 'stakeOnly', action: 'stake' },
-    { account: 'stakeMint', action: 'stake' },
     { account: 'stakeMintClaim', action: 'stake' },
 
     { action: 'moveForwardPeriods' },
 
+    { account: 'stakeOnly', action: 'stake' },
+    { account: 'stakeMint', action: 'stake' },
+
     { account: 'everything', action: 'splitStake', target: 'splitTarget' },
 
     { account: 'everything', action: 'checkIn' },
-    { account: 'stakeMint', action: 'checkIn' },
     { account: 'stakeMintClaim', action: 'checkIn' },
 
     { action: 'burnBooty', amount: 1e26 },
 
     { action: 'moveForwardPeriods' },
+
+    { account: 'stakeMint', action: 'checkIn' },
 
     { action: 'mintBooty' },
 
