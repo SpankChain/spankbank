@@ -1,9 +1,6 @@
 // TODO
-// 1. test each value of spankpoints (stake for each possible period)
 // 2. not sure what tests should be done in separate msig file
 // 4. test events are properly emitted
-// 6. make sure doStake / _updateNextPeriodPoints fail if called by external
-//    accounts (test internal modifier)
 
 // const {injectInTruffle} = require(`sol-trace`)
 // injectInTruffle(web3, artifacts);
@@ -243,7 +240,7 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe.only('Staking has ten requirements (counting logical AND requirements individually when possible).\n\t1. stake period greater than zero \n\t2. stake period less than or equal to maxPeriods \n\t3. stake greater than zero \n\t4. startingPeriod is zero \n\t5. endingPeriod is zero \n\t6. transfer complete \n\t7. delegateKey is not 0x0 \n\t8. bootyBase is not 0x0 \n\t9. delegateKey -> stakerAddress is 0x0\n\t10. SpankBankIsOpen modifier\n', () => {
+  describe('Staking has ten requirements (counting logical AND requirements individually when possible).\n\t1. stake period greater than zero \n\t2. stake period less than or equal to maxPeriods \n\t3. stake greater than zero \n\t4. startingPeriod is zero \n\t5. endingPeriod is zero \n\t6. transfer complete \n\t7. delegateKey is not 0x0 \n\t8. bootyBase is not 0x0 \n\t9. delegateKey -> stakerAddress is 0x0\n\t10. SpankBankIsOpen modifier\n', () => {
 
     // TODO test staking after moving forward periods
 
@@ -364,6 +361,7 @@ contract('SpankBank', (accounts) => {
         assert.equal(err, 'TypeError: spankbank._updateNextPeriodPoints is not a function')
       }
     })
+
     it('1. stake periods is zero', async () => {
       staker1.periods = 0
 
@@ -467,6 +465,27 @@ contract('SpankBank', (accounts) => {
       // only staker1 should have been able to stake via receiveApproval
       await verifyStake([staker1])
     })
+  })
+
+  describe('Stake - spankpoints correctly calculated for all periods', () => {
+    let periodCounter = 1
+
+    while(periodCounter <= data.spankbank.maxPeriods) {
+      (function() {
+        // required bc periodCounter updates, thisPeriod acts as in-scope cache
+        let thisPeriod = periodCounter
+        describe('stake '+periodCounter+' periods', () => {
+          it('spankpoints verified', async () => {
+            staker1.periods = thisPeriod
+            await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
+            await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
+            await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+            await verifyStake(staker1)
+          })
+        })
+      })()
+      periodCounter++
+    }
   })
 
   describe('sending fees has three requirements\n\t1. BOOTY amount must be greater than zero\n\t2. transfer complete\n\t3. SpankBankIsOpen modifier\n', () => {
