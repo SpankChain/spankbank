@@ -1,6 +1,3 @@
-// TODO closingVotes is defined on period but never used
-// - should be removed globally -> only use period votes
-
 pragma solidity 0.4.24;
 import {SafeMath} from "./SafeMath.sol";
 import {HumanStandardToken} from "./HumanStandardToken.sol";
@@ -72,8 +69,6 @@ contract SpankBank {
     uint256 public maxPeriods;
     uint256 public totalSpankStaked;
     bool public isClosed;
-    uint256 public closingVotes;
-    uint256 public closingPeriod;
 
     // ERC-20 BASED TOKEN WITH SOME ADDED PROPERTIES FOR HUMAN READABILITY
     // https://github.com/ConsenSys/Tokens/blob/master/contracts/HumanStandardToken.sol
@@ -391,15 +386,14 @@ contract SpankBank {
 
         Staker storage staker = stakers[msg.sender];
         require(staker.spankStaked > 0, "stake must be greater than zero");
-        require(staker.endingPeriod >= currentPeriod, "endingPeriod must be greater than or equal to currentPeriod");
-        require (staker.votedToClose[currentPeriod] == false);
+        require(currentPeriod < staker.endingPeriod , "staker must not be expired");
+        require(staker.votedToClose[currentPeriod] == false);
         require(isClosed == false);
 
-        if (closingPeriod != currentPeriod) {
-            closingPeriod = currentPeriod;
-            closingVotes = 0;
-        }
+        uint256 closingVotes = periods[currentPeriod].closingVotes;
         closingVotes = SafeMath.add(closingVotes, staker.spankStaked);
+        periods[currentPeriod].closingVotes = closingVotes;
+
         staker.votedToClose[currentPeriod] = true;
 
         uint256 closingTrigger = SafeMath.div(totalSpankStaked, 2);
