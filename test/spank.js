@@ -713,18 +713,12 @@ contract('SpankBank', (accounts) => {
   describe.only('splitStake has eight requirements\n\t1. the new staker address is not address(0)\n\t2. the new delegateKey is not address(0)\n\t3. the new bootyBase is not address(0)\n\t4. the new delegateKey is not already in use\n\t5. the stake amount to be split is greater than zero\n\t6. the current period is less than the stakers ending period\n\t7. the amount to be split is less than or equal to staker\'s staker\n\t8. the staker has no spank points for current period (has not yet checked in', () => {
 
     // TODO test additional happy cases
-    // - different split amounts
-    // - different delgateKey / bootyBase
-    // - multiple splitStakes from same address
-    // - address that is split to can further splitStake to another address
     // - should work even if spankbank is closed
-    // - should work even if staker is expired
 
-    // TODO edge cases
-    // - splitStake -> 0, checkIn should succeed, but spankpoints should be 0
+    const verifySplitStake = async (staker1, staker2, splitAmount, totalSpankStaked) => {
+      // by default, assumes staker1.stake is totalSpankStaked
+      totalSpankStaked = totalSpankStaked ? totalSpankStaked : staker1.stake
 
-    // assumes staker1 is the only staker
-    const verifySplitStake = async (staker1, staker2, splitAmount) => {
       const bankedStaker1 = await spankbank.stakers(staker1.address)
       const bankedStaker2 = await spankbank.stakers(staker2.address)
       const [spankStaked1, startingPeriod1, endingPeriod1] = bankedStaker1
@@ -746,7 +740,7 @@ contract('SpankBank', (accounts) => {
 
       // spankBank SPANK remains the same
       const spankbankSpankBalance = await spankToken.balanceOf(spankbank.address)
-      assert.equal(+spankbankSpankBalance, staker1.stake)
+      assert.equal(+spankbankSpankBalance, totalSpankStaked)
 
       // stakerByDelegateKey -> set
       const stakerAddress2 = await spankbank.getStakerFromDelegateKey(staker2.delegateKey)
@@ -809,6 +803,70 @@ contract('SpankBank', (accounts) => {
       await verifySplitStake(staker1, staker2, splitAmount)
     })
 
+    it('0.5 splitStake successful - two splitstakes from same address', async () => {
+      const totalStakedSpank = staker1.stake
+      splitAmount = staker1.stake / 2
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
+      await verifySplitStake(staker1, staker2, splitAmount)
+
+      const staker3 = {
+        address: accounts[3],
+        delegateKey: accounts[3],
+        bootyBase: accounts[3]
+      }
+
+      // verifySplitStake expects staker1.stake to reflect onchain staked spank
+      const [spankStaked1] = await spankbank.stakers(staker1.address)
+      staker1.stake = +spankStaked1
+
+      await spankbank.splitStake(staker3.address, staker3.delegateKey, staker3.bootyBase, splitAmount, {from: staker1.address})
+      await verifySplitStake(staker1, staker3, splitAmount, totalStakedSpank)
+    })
+
+    it('0.6 splitStake successful - chained splitStake', async () => {
+      const totalStakedSpank = staker1.stake
+      splitAmount = staker1.stake / 2
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
+      await verifySplitStake(staker1, staker2, splitAmount)
+
+      const staker3 = {
+        address: accounts[3],
+        delegateKey: accounts[3],
+        bootyBase: accounts[3]
+      }
+
+      // verifySplitStake expects staker1.stake (in that function context) to reflect onchain staked spank
+      const [spankStaked2] = await spankbank.stakers(staker2.address)
+      staker2.stake = +spankStaked2
+
+      // split 100% of the spank split to staker2 in turn to staker3
+      await spankbank.splitStake(staker3.address, staker3.delegateKey, staker3.bootyBase, splitAmount, {from: staker2.address})
+      await verifySplitStake(staker2, staker3, splitAmount, totalStakedSpank)
+    })
+
+    it('0.7.1 edge case - checkIn after 100% splitStake works but points=0', async () => {
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
+      await verifySplitStake(staker1, staker2, splitAmount)
+      await spankbank.checkIn(0, {from: staker1.delegateKey})
+      const nextPeriod = +(await spankbank.currentPeriod()) + 1
+      const spankPoints = await spankbank.getSpankPoints.call(staker1.address, nextPeriod)
+      assert.equal(+spankPoints, 0)
+    })
+
+    it('0.7.2 edge case - checkIn after <100% splitStake works and points>0', async () => {
+      splitAmount = staker1.stake / 2
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
+      await verifySplitStake(staker1, staker2, splitAmount)
+      await spankbank.checkIn(0, {from: staker1.delegateKey})
+      const nextPeriod = +(await spankbank.currentPeriod()) + 1
+      const spankPoints = await spankbank.getSpankPoints.call(staker1.address, nextPeriod)
+      assert.isAbove(+spankPoints, 0)
+    })
+
     it('1. splitStake fails - new address is 0x0', async () => {
       staker2.address = "0x0000000000000000000000000000000000000000"
       await moveForwardPeriods(1)
@@ -863,5 +921,6 @@ contract('SpankBank', (accounts) => {
       assert.isAbove(+spankPoints, 0)
       await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
     })
+
   })
 })
