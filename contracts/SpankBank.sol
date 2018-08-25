@@ -80,7 +80,7 @@ contract SpankBank {
     // 2 -> 50%
     // ...
     // 12 -> 100%
-    mapping(uint256 => uint256) pointsTable;
+    mapping(uint256 => uint256) public pointsTable;
 
     /*************************************
     INTERAL ACCOUNTING

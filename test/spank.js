@@ -75,7 +75,6 @@ async function moveForwardPeriods(periods) {
   }, (err)=> {`error increasing time`});
   await forceMine()
   const updatedBlocktimestamp = await blockTime()
-  // console.log('\t(moveForwardPeriods)')
   return true
 }
 
@@ -164,7 +163,37 @@ contract('SpankBank', (accounts) => {
     owner = accounts[0]
   })
 
-  // TODO test proper contract initialization here.
+  describe('SpankBank contract deployment', () => {
+    it('parameters are initialized correctly', async () => {
+      const currentPeriod = +(await spankbank.currentPeriod.call())
+      assert.equal(currentPeriod, 0)
+
+      const periodLength = +(await spankbank.periodLength.call())
+      assert.equal(periodLength, data.spankbank.periodLength)
+
+      const maxPeriods = +(await spankbank.maxPeriods.call())
+      assert.equal(maxPeriods, data.spankbank.maxPeriods)
+
+      const SPANK_reference = await spankbank.spankToken.call()
+      assert.equal(SPANK_reference, spankToken.address)
+
+      const BOOTY_reference = await spankbank.bootyToken.call()
+      assert.equal(BOOTY_reference, bootyToken.address)
+
+      const totalBootySupply = +(await bootyToken.totalSupply.call()).dividedBy(e18)
+      assert.equal(totalBootySupply, initialBootySupply)
+
+      const ownerBootyBalance = +(await bootyToken.balanceOf.call(owner)).dividedBy(e18)
+      assert.equal(ownerBootyBalance, initialBootySupply)
+
+      let stakePeriods = 1
+      while(stakePeriods <= data.spankbank.maxPeriods) {
+        let points = +(await spankbank.pointsTable.call(stakePeriods))
+        assert.equal(points, calcSpankPoints(stakePeriods))
+        stakePeriods++
+      }
+    })
+  })
 
   describe('Staking has nine requirements (counting logical AND requirements individually when possible).\n\t1. stake period greater than zero \n\t2. stake period less than or equal to maxPeriods \n\t3. stake greater than zero \n\t4. startingPeriod is zero \n\t5. endingPeriod is zero \n\t6. transfer complete \n\t7. delegateKey is not 0x0 \n\t8. bootyBase is not 0x0 \n\t9. delegateKey -> stakerAddress is 0x0\n', () => {
 
@@ -1052,8 +1081,6 @@ contract('SpankBank', (accounts) => {
         periods: 12
       }
 
-      currentPeriod = +(await spankbank.currentPeriod())
-
       await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
       await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
@@ -1062,6 +1089,7 @@ contract('SpankBank', (accounts) => {
       await spankToken.approve(spankbank.address, staker2.stake, {from: staker2.address})
       await spankbank.stake(staker2.stake, staker2.periods, staker2.delegateKey, staker2.bootyBase, {from : staker2.address})
 
+      currentPeriod = +(await spankbank.currentPeriod())
     })
 
     afterEach(async () => {
@@ -1171,7 +1199,7 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe.only('withdraw stake has one requirement\n\t1. current period must be greater than staker ending period\n', () => {
+  describe('withdraw stake has one requirement\n\t1. current period must be greater than staker ending period\n', () => {
 
     beforeEach(async () => {
       snapshotId = await snapshot()
