@@ -1,10 +1,7 @@
 // TODO
 // 1. test each value of spankpoints (stake for each possible period)
 // 2. not sure what tests should be done in separate msig file
-// 3. some tests *need* to run in period 0, this can only be done after moving
-//    forward if contracts are redeployed with the same startTime...?
 // 4. test events are properly emitted
-// 5. test spankBankIsOpen modifier
 // 6. make sure doStake / _updateNextPeriodPoints fail if called by external
 //    accounts (test internal modifier)
 
@@ -116,11 +113,11 @@ contract('SpankBank', (accounts) => {
       // stakers[staker.address] -> Staker
       const bankedStaker = await spankbank.stakers(staker.address)
       const [spankStaked, startingPeriod, endingPeriod, delegateKey, bootyBase] = bankedStaker
-      assert.equal(spankStaked, staker.stake)
+      assert.equal(+spankStaked, staker.stake)
       // staking during period 0 -> starting period = 1
-      assert.equal(startingPeriod, nextPeriod)
+      assert.equal(+startingPeriod, nextPeriod)
       // staking during period 0 -> ending period = 12
-      assert.equal(endingPeriod, currentPeriod + staker.periods)
+      assert.equal(+endingPeriod, currentPeriod + staker.periods)
       assert.equal(delegateKey, staker.delegateKey)
       assert.equal(bootyBase, staker.bootyBase)
 
@@ -157,7 +154,7 @@ contract('SpankBank', (accounts) => {
     const totalSpankStaked = await spankToken.balanceOf.call(spankbank.address)
     assert.equal(+totalSpankStaked, expectedTotalSpankStaked)
 
-    // total spankpoints for next period (assumes single staker)
+    // total spankpoints for next period
     const [_, totalSpankPoints] = await spankbank.periods(nextPeriod)
     assert.equal(+totalSpankPoints, expectedTotalSpankPoints)
 
@@ -246,7 +243,7 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe('Staking has ten requirements (counting logical AND requirements individually when possible).\n\t1. stake period greater than zero \n\t2. stake period less than or equal to maxPeriods \n\t3. stake greater than zero \n\t4. startingPeriod is zero \n\t5. endingPeriod is zero \n\t6. transfer complete \n\t7. delegateKey is not 0x0 \n\t8. bootyBase is not 0x0 \n\t9. delegateKey -> stakerAddress is 0x0\n\t10. SpankBankIsOpen modifier\n', () => {
+  describe.only('Staking has ten requirements (counting logical AND requirements individually when possible).\n\t1. stake period greater than zero \n\t2. stake period less than or equal to maxPeriods \n\t3. stake greater than zero \n\t4. startingPeriod is zero \n\t5. endingPeriod is zero \n\t6. transfer complete \n\t7. delegateKey is not 0x0 \n\t8. bootyBase is not 0x0 \n\t9. delegateKey -> stakerAddress is 0x0\n\t10. SpankBankIsOpen modifier\n', () => {
 
     // TODO test staking after moving forward periods
 
@@ -326,6 +323,47 @@ contract('SpankBank', (accounts) => {
       await verifyStake([staker1, staker2])
     })
 
+    it('0.7 edge case - doStake fails when called from external account', async () => {
+      try {
+        // if *internal* is removed, doStake will succeed
+        await spankbank.doStake(staker1.address, staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+
+        await verifyStake(staker1)
+        throw new Error('doStake succeeded')
+      } catch (err) {
+        assert.equal(err, 'TypeError: spankbank.doStake is not a function')
+      }
+    })
+
+    it('0.8 edge case - _updateNextPeriodPoints fails when called from external account', async () => {
+      try {
+        await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+        await verifyStake(staker1)
+
+        const originalPoints = calcSpankPoints(staker1.periods, staker1.stake)
+
+        // we attempt to improperly update the spankpoints for a staker
+        // this will also increment the totalSpankPoints
+        staker1.periods = 2
+
+        // if *internal* is removed, _updateNextPeriodPoints will succeed
+        await spankbank._updateNextPeriodPoints(staker1.address, staker1.periods, {from : staker1.address})
+
+        nextPeriod = +(await spankbank.currentPeriod()) + 1
+
+        // staker spankpoints for next period
+        const spankPoints = await spankbank.getSpankPoints.call(staker1.address, nextPeriod)
+        assert.equal(+spankPoints, calcSpankPoints(staker1.periods, staker1.stake))
+
+        // total spankpoints for next period
+        const [_, totalSpankPoints] = await spankbank.periods(nextPeriod)
+        assert.equal(+totalSpankPoints, +spankPoints + originalPoints)
+
+        throw new Error('_updateNextPeriodPoints succeeded')
+      } catch (err) {
+        assert.equal(err, 'TypeError: spankbank._updateNextPeriodPoints is not a function')
+      }
+    })
     it('1. stake periods is zero', async () => {
       staker1.periods = 0
 
