@@ -1,12 +1,12 @@
 // TODO
 // 1. test each value of spankpoints (stake for each possible period)
-// 2. test staking with different delegateKey/bootyBase values
-// 3. console logs arent happening - do I need to use promise based assertions?
-// 4. not sure what tests should be done in separate msig file
-// 5. some tests *need* to run in period 0, this can only be done after moving
+// 2. not sure what tests should be done in separate msig file
+// 3. some tests *need* to run in period 0, this can only be done after moving
 //    forward if contracts are redeployed with the same startTime...?
-// 6. test events are properly emitted
-// 7. test spankBankIsOpen modifier
+// 4. test events are properly emitted
+// 5. test spankBankIsOpen modifier
+// 6. make sure doStake / _updateNextPeriodPoints fail if called by external
+//    accounts (test internal modifier)
 
 // const {injectInTruffle} = require(`sol-trace`)
 // injectInTruffle(web3, artifacts);
@@ -166,7 +166,7 @@ contract('SpankBank', (accounts) => {
 
   // TODO test proper contract initialization here.
 
-  describe.skip('Staking has nine requirements (counting logical AND requirements individually when possible).\n\t1. stake period greater than zero \n\t2. stake period less than or equal to maxPeriods \n\t3. stake greater than zero \n\t4. startingPeriod is zero \n\t5. endingPeriod is zero \n\t6. transfer complete \n\t7. delegateKey is not 0x0 \n\t8. bootyBase is not 0x0 \n\t9. delegateKey -> stakerAddress is 0x0\n', () => {
+  describe('Staking has nine requirements (counting logical AND requirements individually when possible).\n\t1. stake period greater than zero \n\t2. stake period less than or equal to maxPeriods \n\t3. stake greater than zero \n\t4. startingPeriod is zero \n\t5. endingPeriod is zero \n\t6. transfer complete \n\t7. delegateKey is not 0x0 \n\t8. bootyBase is not 0x0 \n\t9. delegateKey -> stakerAddress is 0x0\n', () => {
 
     beforeEach(async () => {
       snapshotId = await snapshot()
@@ -225,6 +225,14 @@ contract('SpankBank', (accounts) => {
       await verifyStake(msStaker)
     })
 
+    it('0.4 happy case - different delegateKey/bootyBase', async () => {
+      staker1.delegateKey = accounts[2]
+      staker1.bootyBase = accounts[2]
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+
+      await verifyStake(staker1)
+    })
+
     it('1. stake periods is zero', async () => {
       staker1.periods = 0
 
@@ -243,6 +251,7 @@ contract('SpankBank', (accounts) => {
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith(SolRevert)
     })
 
+    // TODO starting + ending period tests are redundant
     it('4/5/(9). startingPeriod and EndingPeriod not zero (staker delegateKey exists)', async () => {
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
 
@@ -312,7 +321,7 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe.skip('sending fees has two requirements\n\t1. BOOTY amount must be greater than zero\n\t2. transfer complete\n', () => {
+  describe('sending fees has two requirements\n\t1. BOOTY amount must be greater than zero\n\t2. transfer complete\n', () => {
 
     // Note: The initialBootySupply is minted and sent to the SpankBank owner
     // (whoever deployed it) during contract deployment.
@@ -710,7 +719,7 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe.only('splitStake has eight requirements\n\t1. the new staker address is not address(0)\n\t2. the new delegateKey is not address(0)\n\t3. the new bootyBase is not address(0)\n\t4. the new delegateKey is not already in use\n\t5. the stake amount to be split is greater than zero\n\t6. the current period is less than the stakers ending period\n\t7. the amount to be split is less than or equal to staker\'s staker\n\t8. the staker has no spank points for current period (has not yet checked in', () => {
+  describe('splitStake has eight requirements\n\t1. the new staker address is not address(0)\n\t2. the new delegateKey is not address(0)\n\t3. the new bootyBase is not address(0)\n\t4. the new delegateKey is not already in use\n\t5. the stake amount to be split is greater than zero\n\t6. the current period is less than the stakers ending period\n\t7. the amount to be split is less than or equal to staker\'s staker\n\t8. the staker has no spank points for current period (has not yet checked in\n', () => {
 
     // TODO test additional happy cases
     // - should work even if spankbank is closed
@@ -921,6 +930,104 @@ contract('SpankBank', (accounts) => {
       assert.isAbove(+spankPoints, 0)
       await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
     })
+  })
 
+
+  describe('updating delegate key has three requirements\n\t1. new delegate key address is not address(0)\n\t2. delegate key is not already in use\n\t3. staker has a valid delegate key to update\n', () => {
+
+    beforeEach(async () => {
+      snapshotId = await snapshot()
+
+      staker1 = {
+        address : accounts[1],
+        stake : 100,
+        delegateKey : accounts[1],
+        bootyBase : accounts[1],
+        periods: 12
+      }
+
+      newDelegateKey = accounts[2]
+
+      await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
+      await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+    })
+
+    afterEach(async () => {
+      await restore(snapshotId)
+    })
+
+    it('0. successfully update delegateKey', async () => {
+      await spankbank.updateDelegateKey(newDelegateKey, {from: staker1.address})
+
+      const bankedStaker = await spankbank.stakers(staker1.address)
+      const updatedDelegateKey = bankedStaker[3]
+      assert.equal(updatedDelegateKey, newDelegateKey)
+
+      const stakerAddress = await spankbank.stakerByDelegateKey.call(newDelegateKey)
+      assert.equal(stakerAddress, staker1.address)
+
+      const zeroAddress = await spankbank.stakerByDelegateKey.call(staker1.delegateKey)
+      assert.equal(zeroAddress, '0x0000000000000000000000000000000000000000')
+    })
+
+    it('1. new delegate key address is not address(0)', async () => {
+      newDelegateKey = '0x0000000000000000000000000000000000000000'
+      await spankbank.updateDelegateKey(newDelegateKey, {from: staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('2. delegate key is not already in use', async () => {
+      newDelegateKey = staker1.delegateKey
+      await spankbank.updateDelegateKey(newDelegateKey, {from: staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('3. non-stakers cant update delegate keys', async () => {
+      const staker2 = {
+        address: accounts[2]
+      }
+
+      await spankbank.updateDelegateKey(newDelegateKey, {from: staker2.address}).should.be.rejectedWith(SolRevert)
+    })
+  })
+
+  describe('updating booty base has one requirement\n\t1. staker must have SPANK staked', () => {
+
+    beforeEach(async () => {
+      snapshotId = await snapshot()
+
+      staker1 = {
+        address : accounts[1],
+        stake : 100,
+        delegateKey : accounts[1],
+        bootyBase : accounts[1],
+        periods: 12
+      }
+
+      newBootyBase = accounts[2]
+
+      await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
+      await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+    })
+
+    afterEach(async () => {
+      await restore(snapshotId)
+    })
+
+    it('0. successfully update bootyBase', async () => {
+      await spankbank.updateBootyBase(newBootyBase, {from: staker1.address})
+
+      const bankedStaker = await spankbank.stakers(staker1.address)
+      const updatedBootyBase = bankedStaker[4]
+      assert.equal(updatedBootyBase, newBootyBase)
+    })
+
+    it('1. must have stake to update booty base', async () => {
+      const staker2 = {
+        address: accounts[2]
+      }
+
+      await spankbank.updateBootyBase(newBootyBase, {from: staker2.address}).should.be.rejectedWith(SolRevert)
+    })
   })
 })

@@ -411,15 +411,14 @@ contract SpankBank {
     }
 
     function updateDelegateKey(address newDelegateKey) public {
-        require (newDelegateKey != address(0));
-        require (stakerByDelegateKey[newDelegateKey] == address(0));
+        require(newDelegateKey != address(0));
+        require(stakerByDelegateKey[newDelegateKey] == address(0));
 
         Staker storage staker = stakers[msg.sender];
-        require (staker.delegateKey != address(0));
-        staker.delegateKey = newDelegateKey;
+        require(staker.delegateKey != address(0), "updateDelegateKey::must have a delegateKey to update delegateKey");
 
         stakerByDelegateKey[staker.delegateKey] = address(0);
-
+        staker.delegateKey = newDelegateKey;
         stakerByDelegateKey[newDelegateKey] = msg.sender;
 
         emit UpdateDelegateKeyEvent(msg.sender);
@@ -427,7 +426,7 @@ contract SpankBank {
 
     function updateBootyBase(address newBootyBase) public {
         Staker storage staker = stakers[msg.sender];
-        require (staker.spankStaked > 0);
+        require(staker.spankStaked > 0);
 
         staker.bootyBase = newBootyBase;
 
@@ -458,5 +457,4 @@ contract SpankBank {
     function getStakerFromDelegateKey(address delegateAddress) public view returns (address) {
         return stakerByDelegateKey[delegateAddress];
     }
-
 }
