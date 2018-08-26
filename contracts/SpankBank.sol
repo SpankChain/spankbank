@@ -169,7 +169,7 @@ contract SpankBank {
         require(spankAmount > 0, "stake::spankAmount must be greater than 0"); // stake must be greater than 0
 
         // the staker must not have an active staking position
-        require(stakers[stakerAddress].startingPeriod == 0 && stakers[stakerAddress].endingPeriod == 0, "stake::startingPeriod and endingPeriod must be 0");
+        require(stakers[stakerAddress].startingPeriod == 0, "stake::startingPeriod and endingPeriod must be 0");
 
         // transfer SPANK to this contract - assumes sender has already "allowed" the spankAmount
         require(spankToken.transferFrom(stakerAddress, this, spankAmount),"stake::spankToken transfer failure");
@@ -202,8 +202,6 @@ contract SpankBank {
 
         staker.spankPoints[currentPeriod + 1] = stakerPoints;
 
-        // TODO decide what to do about period.totalStakedSpank
-        // probably force users to checkIn in order to vote to close?
         Period storage period = periods[currentPeriod];
         period.totalStakedSpank = SafeMath.add(period.totalStakedSpank, staker.spankStaked);
     }
@@ -341,11 +339,7 @@ contract SpankBank {
 
         Staker storage staker = stakers[msg.sender];
 
-        if (isClosed) {
-            staker.endingPeriod = SafeMath.sub(currentPeriod, 1);
-        }
-
-        require(currentPeriod > staker.endingPeriod, "withdrawStake::currentPeriod must be greater than staker.endingPeriod");
+        require(isClosed || currentPeriod > staker.endingPeriod, "withdrawStake::currentPeriod must be greater than staker.endingPeriod, or the spankbank must be closed");
 
         uint256 spankToWithdraw = staker.spankStaked;
 
