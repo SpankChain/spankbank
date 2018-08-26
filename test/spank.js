@@ -1,50 +1,6 @@
-// 1. james - review slack
+// 1. james - test specific require messages
 // 2. msig - review other file
 // 3. events - merge with wolever
-
-// TODO cleanup contract
-// - consistent require messages
-
-// TODO aftermath of convo with james
-// - withdrawStake was failing to allow withdrawals in period 0 after closing
-// - fixed by updating the require
-// - want to disable checkIn, splitStake, and withdrawStake if the stake = 0
-// - also consider applying the same pattern to updateDelegate/bootyBase
-//   - updateBootyBase is already disabled if stake = 0
-//   - updateDelegateKey is not (checks existence of delegateKey)
-//   - I *do* want to be able to updateB/D after withdrawing
-// - need 2/3 types of checks:
-//   1. activeStaker -> stake > 0 and currentPeriod < endingPeriod
-//   (must not be expired and must not have withdrawn)
-//     - voteToClose
-//     - checkIn
-//     - splitStake
-//   2. validStaker -> startingPeriod > 0 (can be expired or withdrawn)
-//     - claimBooty (handled by checking spankpoints at the time)
-//     - updateDelegateKey
-//     - updateBootyBase
-//   3. hasStake -> stake > 0 (can be expired or not)
-//     - withdrawStake
-//
-// NOTES:
-//   1. checking startingPeriod > 0 for updateDelegateKey/bootyBase
-//   2. checking spankStaked > 0 for voteToClose/checkIn/splitStake/withdrawStake
-//
-// TODO additional tests:
-// - updateDelegateKey
-//   - after voteToClose
-//   - after withdraw / 100% splitStake
-// - updateBootyBase
-//   - after voteToClose
-//   - after withdraw / 100% splitStake
-// - splitStake
-//   - error after withdraw / 100% splitStake
-// - checkIn
-//   - error after withdraw / 100% splitStake
-// - voteToClose
-//   - error after withdraw / 100% splitStake
-// - withdrawStake
-//   - error after withdraw / 100% splitStake
 
 // const {injectInTruffle} = require(`sol-trace`)
 // injectInTruffle(web3, artifacts);
@@ -658,7 +614,7 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe('checking in has five requirements\n\t1. current period is less than the staker.endingPeriod\n\t2. updated ending period is greater than the staker ending period\n\t3. the updated ending period does not exceed max staking periods\n\t4. staker spankpoints for next period is zero\n\t5. SpankBankIsOpen modifier\n', () => {
+  describe('checking in has six requirements\n\t1. current period is less than the staker.endingPeriod\n\t2. updated ending period is greater than the staker ending period\n\t3. the updated ending period does not exceed max staking periods\n\t4. staker spankpoints for next period is zero\n\t5. SpankBankIsOpen modifier\n\t6. staker.spankStaked > 0\n', () => {
 
     // Note: if periods = 1, users can not checkIn, they must withdraw and re-stake
 
@@ -714,11 +670,7 @@ contract('SpankBank', (accounts) => {
       assert.equal(+totalSpankPoints, +spankPoints)
     })
 
-    it('1.1 checkIn without staking fails', async () => {
-      await spankbank.checkIn(0, {from: staker1.delegateKey}).should.be.rejectedWith(SolRevert)
-    })
-
-    it('1.2 checkIn with expired stake fails', async () => {
+    it('1. checkIn with expired stake fails', async () => {
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
       await moveForwardPeriods(staker1.periods)
       await spankbank.updatePeriod()
@@ -774,6 +726,31 @@ contract('SpankBank', (accounts) => {
 
       // same as 0.1 happy case except staker1 calls voteToClose before checkIn
       await spankbank.voteToClose({from : staker1.address})
+
+      await spankbank.checkIn(0, {from: staker1.delegateKey}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('6.1 checkIn without staking fails', async () => {
+      await spankbank.checkIn(0, {from: staker1.delegateKey}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('6.2 checkIn fails - splitStake 100%', async () => {
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, staker1.stake, {from: staker1.address})
+      const [spankStaked1] = await spankbank.stakers(staker1.address)
+      assert.equal(+spankStaked1, 0)
+
+      await spankbank.checkIn(0, {from: staker1.delegateKey}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('6.3 checkIn fails - voteToClose -> withdraw', async () => {
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+      await moveForwardPeriods(1)
+      await spankbank.voteToClose({ from: staker1.address })
+      await spankbank.withdrawStake({ from: staker1.address })
+      const [spankStaked1] = await spankbank.stakers(staker1.address)
+      assert.equal(+spankStaked1, 0)
 
       await spankbank.checkIn(0, {from: staker1.delegateKey}).should.be.rejectedWith(SolRevert)
     })
@@ -983,7 +960,7 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe('splitStake has eight requirements\n\t1. the new staker address is not address(0)\n\t2. the new delegateKey is not address(0)\n\t3. the new bootyBase is not address(0)\n\t4. the new delegateKey is not already in use\n\t5. the stake amount to be split is greater than zero\n\t6. the current period is less than the stakers ending period\n\t7. the amount to be split is less than or equal to staker\'s staker\n\t8. the staker has no spank points for current period (has not yet checked in\n', () => {
+  describe('splitStake has eight requirements\n\t1. the new staker address is not address(0)\n\t2. the new delegateKey is not address(0)\n\t3. the new bootyBase is not address(0)\n\t4. the new delegateKey is not already in use\n\t5. the stake amount to be split is greater than zero\n\t6. the current period is less than the stakers ending period\n\t7. the amount to be split is less than or equal to staker\'s stake\n\t8. the staker has no spank points for current period (has not yet checked in)\n', () => {
 
     const verifySplitStake = async (staker1, staker2, splitAmount, totalSpankStaked) => {
       // by default, assumes staker1.stake is totalSpankStaked
@@ -1084,16 +1061,6 @@ contract('SpankBank', (accounts) => {
       await verifySplitStake(staker2, staker3, splitAmount, totalStakedSpank)
     })
 
-    it('0.7.1 edge case - checkIn after 100% splitStake works but points=0', async () => {
-      await moveForwardPeriods(1)
-      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
-      await verifySplitStake(staker1, staker2, splitAmount)
-      await spankbank.checkIn(0, {from: staker1.delegateKey})
-      const nextPeriod = +(await spankbank.currentPeriod()) + 1
-      const spankPoints = await spankbank.getSpankPoints.call(staker1.address, nextPeriod)
-      assert.equal(+spankPoints, 0)
-    })
-
     it('0.7.2 edge case - checkIn after <100% splitStake works and points>0', async () => {
       splitAmount = staker1.stake / 2
       await moveForwardPeriods(1)
@@ -1113,6 +1080,12 @@ contract('SpankBank', (accounts) => {
       const isClosed = await spankbank.isClosed.call()
       assert.ok(isClosed)
 
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
+      await verifySplitStake(staker1, staker2, splitAmount)
+    })
+
+    it('0.9. splitStake success - staker at penultimate period', async () => {
+      await moveForwardPeriods(staker1.periods - 1)
       await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
       await verifySplitStake(staker1, staker2, splitAmount)
     })
@@ -1149,13 +1122,32 @@ contract('SpankBank', (accounts) => {
 
     it('6. splitStake fails - staker expired', async () => {
       await moveForwardPeriods(staker1.periods)
+      await spankbank.updatePeriod()
       await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
     })
 
-    it('7. splitStake fails - splitAmount exceeds staked spank', async () => {
+    it('7.1 splitStake fails - splitAmount exceeds staked spank', async () => {
       splitAmount = staker1.stake + 1
       await moveForwardPeriods(1)
       await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('7.2 splitStake fails - after 100% splitStake', async () => {
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
+      await verifySplitStake(staker1, staker2, splitAmount)
+
+      await spankbank.splitStake(staker3.address, staker3.delegateKey, staker3.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('7.3 splitStake fails - after voteToClose withdrawal', async () => {
+      await moveForwardPeriods(1)
+      await spankbank.voteToClose({from : staker1.address})
+      await spankbank.withdrawStake({from: staker1.address})
+      const [spankStaked1] = await spankbank.stakers(staker1.address)
+      assert.equal(+spankStaked1, 0)
+
+      await spankbank.splitStake(staker3.address, staker3.delegateKey, staker3.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
     })
 
     it('8.1 splitStake fails - staker staked during the same period', async () => {
@@ -1171,6 +1163,7 @@ contract('SpankBank', (accounts) => {
       assert.isAbove(+spankPoints, 0)
       await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
     })
+
   })
 
 
@@ -1325,7 +1318,7 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe('votetoClose has four requires\n\t1. staker spank is greater than zero\n\t2. current period < ending period\n\t3. staker has not already voted to close in current period\n\t4. spankbank is not closed, \n', () => {
+  describe('voteToClose has four requires\n\t1. staker spank is greater than zero\n\t2. current period < ending period\n\t3. staker has not already voted to close in current period\n\t4. spankbank is not closed, \n', () => {
 
     beforeEach(async () => {
       // reducing this so if staker1 and staker2 are both staking, staker2 can
@@ -1436,7 +1429,7 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe('withdraw stake has one requirement\n\t1. current period must be greater than staker ending period\n', () => {
+  describe('withdraw stake has two requirements\n\t1. current period must be greater than staker ending period\n\t2. staker.spankStaked > 0\n', () => {
 
     beforeEach(async () => {
       await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
@@ -1478,24 +1471,25 @@ contract('SpankBank', (accounts) => {
       assert.equal(totalSpankStaked, 0)
     })
 
-    it('0.3 withdrawStake success - after splitstake', async () => {
+    it('0.3 withdrawStake success - after splitstake < 100%', async () => {
+      const splitAmount = staker1.stake / 2
       await moveForwardPeriods(1)
 
-      // split 100% of stake
-      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, staker1.stake, {from: staker1.address})
+      // split 50% of stake
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
 
       await moveForwardPeriods(staker1.periods)
 
       await spankbank.withdrawStake({from: staker1.address})
       await spankbank.withdrawStake({from: staker2.address})
 
-      // staker1 should withdraw 0 spank because all of it was split
+      // staker1 should still have splitAmount (b/c splitAmount = 50% of stake)
       const staker1_SpankBalance = +(await spankToken.balanceOf.call(staker1.address))
-      assert.equal(staker1_SpankBalance, 0)
+      assert.equal(staker1_SpankBalance, splitAmount)
 
-      // staker2 has all of staker1's spank
+      // staker2 should also have splitAmount
       const staker2_SpankBalance = +(await spankToken.balanceOf.call(staker2.address))
-      assert.equal(staker2_SpankBalance, staker1.stake)
+      assert.equal(staker2_SpankBalance, splitAmount)
 
       // spankStaked for both should be 0
       const [spankStaked1] = await spankbank.stakers(staker1.address)
@@ -1512,6 +1506,38 @@ contract('SpankBank', (accounts) => {
 
     it('1. withdrawStake fail - staker not yet expired', async () => {
       await moveForwardPeriods(staker1.periods)
+      await spankbank.withdrawStake({from: staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('2.1 withdrawStake fail - after 100% splitstake', async () => {
+      await moveForwardPeriods(1)
+
+      // split 100% of stake
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, staker1.stake, {from: staker1.address})
+
+      await moveForwardPeriods(staker1.periods)
+
+      await spankbank.withdrawStake({from: staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('2.2 withdrawStake fail - after expired -> withdrawal', async () => {
+      await moveForwardPeriods(staker1.periods + 1)
+      await spankbank.withdrawStake({from: staker1.address})
+      // spankStaked should be 0
+      const [spankStaked1] = await spankbank.stakers(staker1.address)
+      assert.equal(+spankStaked1, 0)
+
+      await spankbank.withdrawStake({from: staker1.address}).should.be.rejectedWith(SolRevert)
+    })
+
+    it('2.3 withdrawStake fail - after voteToClose -> withdrawal', async () => {
+      await moveForwardPeriods(1)
+      await spankbank.voteToClose({ from: staker1.address })
+      await spankbank.withdrawStake({from: staker1.address})
+      // spankStaked should be 0
+      const [spankStaked1] = await spankbank.stakers(staker1.address)
+      assert.equal(+spankStaked1, 0)
+
       await spankbank.withdrawStake({from: staker1.address}).should.be.rejectedWith(SolRevert)
     })
   })

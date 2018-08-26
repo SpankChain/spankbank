@@ -360,11 +360,10 @@ contract SpankBank {
         require(newBootyBase != address(0), "splitStake::bootyBase must be a non-zero address");
         require(stakerByDelegateKey[newDelegateKey] == address(0), "splitStake::delegateKey must not be in use");
 
-        require(staker.spankStaked > 0, "splitStake::stake must be greater than zero");
-        require(currentPeriod < staker.endingPeriod, "splitStake::staker must not have expired");
         require(spankAmount > 0, "splitStake::spankAmount must be greater than 0");
 
         Staker storage staker = stakers[msg.sender];
+        require(currentPeriod < staker.endingPeriod, "splitStake::staker must not have expired");
         require(spankAmount <= staker.spankStaked, "spankAmount must be less than or equal to staker stake");
         require(staker.spankPoints[currentPeriod+1] == 0);
 
