@@ -1174,7 +1174,23 @@ contract('SpankBank', (accounts) => {
   })
 
 
-  describe('updating delegate key has three requirements\n\t1. new delegate key address is not address(0)\n\t2. delegate key is not already in use\n\t3. staker has a valid delegate key to update\n', () => {
+  describe.only('updating delegate key has three requirements\n\t1. new delegate key address is not address(0)\n\t2. delegate key is not already in use\n\t3. staker has a valid delegate key to update\n', () => {
+
+    // - updateDelegateKey
+    //   - after voteToClose
+    //   - after withdraw / 100% splitStake
+
+    const verifyUpdateDelegateKey = async (staker, newDelegateKey) => {
+      const bankedStaker = await spankbank.stakers(staker.address)
+      const updatedDelegateKey = bankedStaker[3]
+      assert.equal(updatedDelegateKey, newDelegateKey)
+
+      const stakerAddress = await spankbank.stakerByDelegateKey.call(newDelegateKey)
+      assert.equal(stakerAddress, staker.address)
+
+      const zeroAddress = await spankbank.stakerByDelegateKey.call(staker.delegateKey)
+      assert.equal(zeroAddress, '0x0000000000000000000000000000000000000000')
+    }
 
     beforeEach(async () => {
       newDelegateKey = accounts[2]
@@ -1184,18 +1200,49 @@ contract('SpankBank', (accounts) => {
       await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
     })
 
-    it('0. successfully update delegateKey', async () => {
+    it('0.1 successfully update delegateKey', async () => {
       await spankbank.updateDelegateKey(newDelegateKey, {from: staker1.address})
+      await verifyUpdateDelegateKey(staker1, newDelegateKey)
+    })
 
-      const bankedStaker = await spankbank.stakers(staker1.address)
-      const updatedDelegateKey = bankedStaker[3]
-      assert.equal(updatedDelegateKey, newDelegateKey)
+    it('0.2 successfully update delegateKey - after spankbank closed', async () => {
+      await spankbank.voteToClose({from : staker1.address})
+      const isClosed = await spankbank.isClosed.call()
+      assert.ok(isClosed)
 
-      const stakerAddress = await spankbank.stakerByDelegateKey.call(newDelegateKey)
-      assert.equal(stakerAddress, staker1.address)
+      await spankbank.updateDelegateKey(newDelegateKey, {from: staker1.address})
+      await verifyUpdateDelegateKey(staker1, newDelegateKey)
+    })
 
-      const zeroAddress = await spankbank.stakerByDelegateKey.call(staker1.delegateKey)
-      assert.equal(zeroAddress, '0x0000000000000000000000000000000000000000')
+    it('0.3 successfully update delegateKey - after voteToClose -> withdraw', async () => {
+      await spankbank.voteToClose({from : staker1.address})
+      await spankbank.withdrawStake({from: staker1.address})
+      const [spankStaked1] = await spankbank.stakers(staker1.address)
+      assert.equal(+spankStaked1, 0)
+
+      await spankbank.updateDelegateKey(newDelegateKey, {from: staker1.address})
+      await verifyUpdateDelegateKey(staker1, newDelegateKey)
+    })
+
+    it('0.4 successfully update delegateKey - after expire -> withdraw', async () => {
+      await moveForwardPeriods(staker1.periods + 1)
+      await spankbank.withdrawStake({from: staker1.address})
+      const [spankStaked1] = await spankbank.stakers(staker1.address)
+      assert.equal(+spankStaked1, 0)
+
+      await spankbank.updateDelegateKey(newDelegateKey, {from: staker1.address})
+      await verifyUpdateDelegateKey(staker1, newDelegateKey)
+    })
+
+    it('0.5 successfully update delegateKey - after 100% splitStake', async () => {
+      newDelegateKey = accounts[3] // using accounts[2] for splitStake
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, staker1.stake, {from: staker1.address})
+      const [spankStaked1] = await spankbank.stakers(staker1.address)
+      assert.equal(+spankStaked1, 0)
+
+      await spankbank.updateDelegateKey(newDelegateKey, {from: staker1.address})
+      await verifyUpdateDelegateKey(staker1, newDelegateKey)
     })
 
     it('1. new delegate key address is not address(0)', async () => {

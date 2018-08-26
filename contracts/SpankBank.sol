@@ -289,7 +289,7 @@ contract SpankBank {
 
         Staker storage staker = stakers[stakerAddress];
 
-        require(staker.spankStaked > 0, "checkIn::staker must have non-zero stake")
+        require(staker.spankStaked > 0, "checkIn::staker must have non-zero stake");
         require(currentPeriod < staker.endingPeriod, "checkIn::staker must not have expired");
         require(staker.spankPoints[currentPeriod+1] == 0, "checkIn::staker must not already have points for the next perid");
 
