@@ -1,6 +1,50 @@
-// 1. james
-// 2. msig
-// 3. events
+// 1. james - review slack
+// 2. msig - review other file
+// 3. events - merge with wolever
+
+// TODO cleanup contract
+// - consistent require messages
+
+// TODO aftermath of convo with james
+// - withdrawStake was failing to allow withdrawals in period 0 after closing
+// - fixed by updating the require
+// - want to disable checkIn, splitStake, and withdrawStake if the stake = 0
+// - also consider applying the same pattern to updateDelegate/bootyBase
+//   - updateBootyBase is already disabled if stake = 0
+//   - updateDelegateKey is not (checks existence of delegateKey)
+//   - I *do* want to be able to updateB/D after withdrawing
+// - need 2/3 types of checks:
+//   1. activeStaker -> stake > 0 and currentPeriod < endingPeriod
+//   (must not be expired and must not have withdrawn)
+//     - voteToClose
+//     - checkIn
+//     - splitStake
+//   2. validStaker -> startingPeriod > 0 (can be expired or withdrawn)
+//     - claimBooty (handled by checking spankpoints at the time)
+//     - updateDelegateKey
+//     - updateBootyBase
+//   3. hasStake -> stake > 0 (can be expired or not)
+//     - withdrawStake
+//
+// NOTES:
+//   1. checking startingPeriod > 0 for updateDelegateKey/bootyBase
+//   2. checking spankStaked > 0 for voteToClose/checkIn/splitStake/withdrawStake
+//
+// TODO additional tests:
+// - updateDelegateKey
+//   - after voteToClose
+//   - after withdraw / 100% splitStake
+// - updateBootyBase
+//   - after voteToClose
+//   - after withdraw / 100% splitStake
+// - splitStake
+//   - error after withdraw / 100% splitStake
+// - checkIn
+//   - error after withdraw / 100% splitStake
+// - voteToClose
+//   - error after withdraw / 100% splitStake
+// - withdrawStake
+//   - error after withdraw / 100% splitStake
 
 // const {injectInTruffle} = require(`sol-trace`)
 // injectInTruffle(web3, artifacts);
@@ -939,7 +983,7 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe.only('splitStake has eight requirements\n\t1. the new staker address is not address(0)\n\t2. the new delegateKey is not address(0)\n\t3. the new bootyBase is not address(0)\n\t4. the new delegateKey is not already in use\n\t5. the stake amount to be split is greater than zero\n\t6. the current period is less than the stakers ending period\n\t7. the amount to be split is less than or equal to staker\'s staker\n\t8. the staker has no spank points for current period (has not yet checked in\n', () => {
+  describe('splitStake has eight requirements\n\t1. the new staker address is not address(0)\n\t2. the new delegateKey is not address(0)\n\t3. the new bootyBase is not address(0)\n\t4. the new delegateKey is not already in use\n\t5. the stake amount to be split is greater than zero\n\t6. the current period is less than the stakers ending period\n\t7. the amount to be split is less than or equal to staker\'s staker\n\t8. the staker has no spank points for current period (has not yet checked in\n', () => {
 
     const verifySplitStake = async (staker1, staker2, splitAmount, totalSpankStaked) => {
       // by default, assumes staker1.stake is totalSpankStaked

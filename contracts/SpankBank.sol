@@ -66,9 +66,9 @@ contract SpankBank {
     ************************************/
     // GLOBAL CONSTANT VARIABLES
     uint256 public periodLength; // time length of each period in seconds
-    uint256 public maxPeriods;
-    uint256 public totalSpankStaked;
-    bool public isClosed;
+    uint256 public maxPeriods; // the maximum # of periods a staker can stake for
+    uint256 public totalSpankStaked; // the total SPANK staked across all stakers
+    bool public isClosed; // true if voteToClose has passed, allows early withdrawals
 
     // ERC-20 BASED TOKEN WITH SOME ADDED PROPERTIES FOR HUMAN READABILITY
     // https://github.com/ConsenSys/Tokens/blob/master/contracts/HumanStandardToken.sol
@@ -289,9 +289,9 @@ contract SpankBank {
 
         Staker storage staker = stakers[stakerAddress];
 
+        require(staker.spankStaked > 0, "checkIn::staker must have non-zero stake")
         require(currentPeriod < staker.endingPeriod, "checkIn::staker must not have expired");
-
-        require(staker.spankPoints[currentPeriod+1] == 0, "checkIn::staker.spankPoints[nextPeriod] must be 0");
+        require(staker.spankPoints[currentPeriod+1] == 0, "checkIn::staker must not already have points for the next perid");
 
         // If updatedEndingPeriod is 0, don't update the ending period
         if (updatedEndingPeriod > 0) {
@@ -338,6 +338,7 @@ contract SpankBank {
         updatePeriod();
 
         Staker storage staker = stakers[msg.sender];
+        require(staker.spankStaked > 0);
 
         require(isClosed || currentPeriod > staker.endingPeriod, "withdrawStake::currentPeriod must be greater than staker.endingPeriod, or the spankbank must be closed");
 
@@ -359,10 +360,11 @@ contract SpankBank {
         require(newBootyBase != address(0), "splitStake::bootyBase must be a non-zero address");
         require(stakerByDelegateKey[newDelegateKey] == address(0), "splitStake::delegateKey must not be in use");
 
+        require(staker.spankStaked > 0, "splitStake::stake must be greater than zero");
+        require(currentPeriod < staker.endingPeriod, "splitStake::staker must not have expired");
         require(spankAmount > 0, "splitStake::spankAmount must be greater than 0");
 
         Staker storage staker = stakers[msg.sender];
-        require(currentPeriod < staker.endingPeriod, "currentPeriod must be less than staker endingPeriod");
         require(spankAmount <= staker.spankStaked, "spankAmount must be less than or equal to staker stake");
         require(staker.spankPoints[currentPeriod+1] == 0);
 
@@ -379,6 +381,7 @@ contract SpankBank {
         updatePeriod();
 
         Staker storage staker = stakers[msg.sender];
+
         require(staker.spankStaked > 0, "stake must be greater than zero");
         require(currentPeriod < staker.endingPeriod , "staker must not be expired");
         require(staker.votedToClose[currentPeriod] == false);
@@ -403,7 +406,7 @@ contract SpankBank {
         require(stakerByDelegateKey[newDelegateKey] == address(0));
 
         Staker storage staker = stakers[msg.sender];
-        require(staker.delegateKey != address(0), "updateDelegateKey::must have a delegateKey to update delegateKey");
+        require(staker.startingPeriod > 0);
 
         stakerByDelegateKey[staker.delegateKey] = address(0);
         staker.delegateKey = newDelegateKey;
@@ -414,7 +417,7 @@ contract SpankBank {
 
     function updateBootyBase(address newBootyBase) public {
         Staker storage staker = stakers[msg.sender];
-        require(staker.spankStaked > 0);
+        require(staker.startingPeriod > 0);
 
         staker.bootyBase = newBootyBase;
 
