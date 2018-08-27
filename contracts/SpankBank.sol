@@ -27,7 +27,7 @@ contract SpankBank {
     );
 
     event PeriodEvent(
-        uint256 period,
+        uint256 indexed period,
         uint256 bootyFees,
         uint256 totalSpankPoints,
         uint256 bootyMinted,
@@ -37,7 +37,7 @@ contract SpankBank {
 
     event SendFeesEvent (
         address indexed sender,
-        uint256 indexed bootyAmount
+        uint256 bootyAmount
     );
 
     event MintBootyEvent (
@@ -66,9 +66,10 @@ contract SpankBank {
     event SplitStakeEvent (
         address indexed staker,
         address indexed newAddress,
+        address indexed newDelegateKey,
+        address newBootyBase,
         uint256 spankAmount
     );
-        // TODO: Do we want delegateKey and bootyBase in here? Probably?
 
     event VoteToCloseEvent (
         address indexed staker,
@@ -419,7 +420,7 @@ contract SpankBank {
 
         stakerByDelegateKey[newDelegateKey] = newAddress;
 
-        emit SplitStakeEvent(msg.sender, newAddress, spankAmount);
+        emit SplitStakeEvent(msg.sender, newAddress, newDelegateKey, newBootyBase, spankAmount);
     }
 
     function voteToClose() public {
