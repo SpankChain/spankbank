@@ -1,3 +1,4 @@
+const fs = require('fs')
 const HttpProvider = require(`ethjs-provider-http`)
 const EthRPC = require(`ethjs-rpc`)
 const data = require('../data.json')
@@ -50,72 +51,164 @@ contract('SpankBank::integration', (accounts) => {
     bootyAddress = await spankBank.bootyToken()
     bootyToken = await BootyToken.at(bootyAddress)
 
-    staker = {
-      address : accounts[0],
-      stake : 100,
-      delegateKey : accounts[0],
-      bootyBase : accounts[0],
-      periods : 12
+    stakers = {
+      everything: {
+        address: accounts[0],
+        stake: 690,
+        delegateKey: accounts[0],
+        bootyBase: accounts[0],
+        periods: 12,
+      },
+
+      splitTarget: {
+        address: accounts[1],
+      },
+
+      delegateTarget: {
+        address: accounts[2],
+      },
+
+      bootyBaseTarget: {
+        address: accounts[3],
+      },
+
+      stakeOnly: {
+        address: accounts[4],
+        stake: 691,
+        periods: 5,
+      },
+
+      stakeMint: {
+        address: accounts[5],
+        stake: 692,
+        periods: 6,
+      },
+
+      stakeMintClaim: {
+        address: accounts[6],
+        stake: 693,
+        periods: 7,
+      },
+
     }
 
-    await spankToken.approve(spankBank.address, staker.stake, {from: staker.address})
-    await bootyToken.approve(spankBank.address, 1, { from: staker.address })
+    // This is used by the tests in service-spankbank so it doesn't need to
+    // hard-code addresses.
+    fs.writeFileSync('/tmp/sc-spankbank-explorer-test-stakers.json', JSON.stringify(stakers))
   })
 
-  describe('All SpankBank Events, Happy Case', () => {
-    it('Stake', async () => {
-      await spankBank.stake(staker.stake, staker.periods, staker.delegateKey, staker.bootyBase, { from: staker.address })
-      await wait(2000)
-    })
-    it('Send Fees', async () => {
-      await spankBank.sendFees(1, { from: staker.address })
-      await wait(2000)
-    })
-    it('Split Stake', async () => {
-      await moveForwardPeriods(1)
-      await spankBank.updatePeriod()
+  let steps = [
+    { account: 'everything', action: 'approve' },
+    { account: 'stakeOnly', action: 'approve' },
+    { account: 'stakeMint', action: 'approve' },
+    { account: 'stakeMintClaim', action: 'approve' },
 
+    { account: 'everything', action: 'stake' },
+    { account: 'stakeMintClaim', action: 'stake' },
+
+    { action: 'moveForwardPeriods' },
+
+    { account: 'stakeOnly', action: 'stake' },
+    { account: 'stakeMint', action: 'stake' },
+
+    { account: 'everything', action: 'splitStake', target: 'splitTarget' },
+
+    { account: 'everything', action: 'checkIn' },
+    { account: 'stakeMintClaim', action: 'checkIn' },
+
+    { action: 'burnBooty', amount: 1000000000000000000000 /* 1,000 out of 10K total*/},
+
+    { action: 'moveForwardPeriods' },
+
+    { account: 'stakeMint', action: 'checkIn' },
+
+    { action: 'mintBooty' },
+
+    { account: 'everything', action: 'claimBooty' },
+    { account: 'stakeMintClaim', action: 'claimBooty' },
+
+    { account: 'everything', action: 'updateDelegateKey', target: 'delegateTarget' },
+
+    { account: 'everything', action: 'updateBootyBase', target: 'bootyBaseTarget' },
+
+    { account: 'everything', action: 'voteToClose' },
+
+    { action: 'moveForwardPeriods', count: 12 },
+
+    { account: 'everything', action: 'withdraw' },
+
+  ]
+
+  let actions = {
+    approve: async (account, step) => {
+      await spankToken.transfer(account.address, account.stake)
+      await spankToken.approve(spankBank.address, account.stake, {from: account.address})
+    },
+
+    stake: async (account, step) => {
+      await spankBank.stake(
+        account.stake,
+        account.periods,
+        account.delegateKey || account.address,
+        account.bootyBase || account.address,
+        { from: account.address }
+      )
+    },
+
+    splitStake: async (account, step) => {
       newStaker = {
-        address: accounts[1]
+        address: stakers[step.target].address,
       }
 
-      await spankBank.splitStake(newStaker.address, newStaker.address, newStaker.address, staker.stake/2, { from: staker.address })
-      await wait(2000)
-    })
-    it('Check In', async () => {
-      checkInStaker = await getStaker(staker.address)
-      checkInPeriod = parseInt(checkInStaker.endingPeriod) + 1
-      await spankBank.checkIn(checkInPeriod, { from: staker.address })
-      await wait(2000)
-    })
-    it('Mint Booty', async () => {
-      await spankBank.mintBooty()
-      await wait(2000)
-    })
-    it('Claim Booty', async () => {
-      currentPeriod = await spankBank.currentPeriod()
-      await spankBank.claimBooty(parseInt(currentPeriod) - 1, { from: staker.address })
-      await wait(2000)
-    })
-    it('Update Delegate Key', async () => {
-      newDelegateKey = accounts[2]
-      await spankBank.updateDelegateKey(newDelegateKey, {from: staker.address})
-      await wait(2000)
-    })
-    it('Update Booty Base', async () => {
-      newBootyBaseKey = accounts[3]
-      await spankBank.updateBootyBase(newBootyBaseKey, { from: staker.address })
-      await wait(2000)
-    })
-    it('Vote to Close', async () => {
-      await spankBank.voteToClose({ from: staker.address })
-      await wait(2000)
-    })
-    it('Withdraw', async () => {
-      await moveForwardPeriods(staker.periods + 1)
+      await spankBank.splitStake(newStaker.address, newStaker.address, newStaker.address, account.stake/2, { from: account.address })
+    },
+
+    moveForwardPeriods: async (_, step) => {
+      await moveForwardPeriods(step.count || 1)
       await spankBank.updatePeriod()
-      await spankBank.withdrawStake()
-      await wait(2000)
+    },
+
+    checkIn: async (account, step) => {
+      await spankBank.checkIn(0, { from: account.address })
+    },
+
+    burnBooty: async (account, step) => {
+      await bootyToken.approve(spankBank.address, step.amount)
+      await spankBank.sendFees(step.amount)
+    },
+
+    mintBooty: async (account, step) => {
+      await spankBank.mintBooty()
+    },
+
+    claimBooty: async (account, step) => {
+      currentPeriod = await spankBank.currentPeriod()
+      await spankBank.claimBooty(parseInt(currentPeriod) - 1, { from: account.address })
+    },
+
+    updateDelegateKey: async (account, step) => {
+      await spankBank.updateDelegateKey(stakers[step.target].address, {from: account.address})
+    },
+
+    updateBootyBase: async (account, step) => {
+      await spankBank.updateBootyBase(stakers[step.target].address, { from: account.address })
+    },
+
+    voteToClose: async (account, step) => {
+      await spankBank.voteToClose({ from: account.address })
+    },
+
+    withdraw: async (account, step) => {
+      await spankBank.withdrawStake({ from: account.address })
+    },
+  }
+
+  describe('All SpankBank Events', () => {
+    steps.forEach((step, idx) => {
+      it(`${idx + 1}. ${JSON.stringify(step)}`, async () => {
+        let func = actions[step.action]
+        await func(stakers[step.account], step)
+      })
     })
   })
 })

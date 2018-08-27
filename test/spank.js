@@ -5,8 +5,7 @@
 // const {injectInTruffle} = require(`sol-trace`)
 // injectInTruffle(web3, artifacts);
 
-const { decToBytes, addrToBytes } = require('./utils')
-
+const util = require('util');
 const HttpProvider = require(`ethjs-provider-http`)
 const EthRPC = require(`ethjs-rpc`)
 const ethRPC = new EthRPC(new HttpProvider('http://localhost:8545'))
@@ -19,13 +18,17 @@ const SolRevert = 'VM Exception while processing transaction: revert'
 const SpankToken = artifacts.require('./HumanStandardToken')
 const BootyToken = artifacts.require('./MintAndBurnToken')
 const SpankBank = artifacts.require('./SpankBank')
-
 const MultiSigWallet = artifacts.require('./MultiSigWallet')
+
+const { decToBytes, addrToBytes } = require('./utils')
 
 const e18 = 1000000000000000000 // 1e18
 
 const data = require('../data.json')
 const initialBootySupply = data.spankbank.initialBootySupply / e18 // should be 10,000
+
+const getBlock = util.promisify(web3.eth.getBlock.bind(web3))
+const getTransaction = util.promisify(web3.eth.getTransaction.bind(web3))
 
 async function snapshot() {
   return new Promise((accept, reject) => {
@@ -78,6 +81,29 @@ async function moveForwardPeriods(periods) {
   return true
 }
 
+function validateSplitStakeEvent(amount, staker, splitStaker, ev) {
+  ev.staker.should.be.equal(staker.address)
+  ev.newAddress.should.be.equal(splitStaker.address)
+  ev.spankAmount.should.be.bignumber.equal(amount)
+  return true
+}
+
+function getEventParams(tx, event) {
+  if (tx.logs.length > 0) {
+    for (let idx=0; idx < tx.logs.length; idx++) {
+      if (tx.logs[idx].event == event) {
+        return tx.logs[idx].args
+      }
+    }
+  }
+  return false
+}
+
+async function getPeriod(period) {
+  resp = await spankbank.periods(period)
+  return { period : period, bootyFees : resp[0], totalSpankPoints : resp[1], bootyMinted : resp[2], mintingComplete : resp[3], startTime: resp[4], endTime: resp[5] }
+}
+
 function makeExtraData(staker) {
   sixtyFourZeros = "0000000000000000000000000000000000000000000000000000000000000000"
   periodLengthHex = staker.periods.toString(16)
@@ -98,15 +124,19 @@ function multiSigStake(spankAmount, stakePeriods, delegateKey, bootyBase) {
 contract('SpankBank', (accounts) => {
   let snapshotId
 
-  // input is a single staker or an array of stakers
-  const verifyStake = async (stakers) => {
+  // input is a single staker or an array of stakers (same for txs)
+  const verifyStake = async (stakers, txs) => {
     stakers = stakers.length ? stakers : [stakers]
+    // only test event params if txs supplied
+    if (txs) {
+      txs = txs.length ? txs : [txs]
+    }
 
     const currentPeriod = +(await spankbank.currentPeriod())
     const nextPeriod = currentPeriod + 1
 
     // verify staker-specific state transitions
-    for (staker of stakers) {
+    for (let [index, staker] of stakers.entries()) {
       // stakers[staker.address] -> Staker
       const bankedStaker = await spankbank.stakers(staker.address)
       const [spankStaked, startingPeriod, endingPeriod, delegateKey, bootyBase] = bankedStaker
@@ -137,6 +167,16 @@ contract('SpankBank', (accounts) => {
       // stakerByDelegateKey -> set
       const stakerAddress = await spankbank.getStakerFromDelegateKey(staker.delegateKey)
       assert.equal(stakerAddress, staker.address)
+
+      // only test event params if txs supplied
+      if (txs) {
+        const event = getEventParams(txs[index], 'StakeEvent')
+        assert.equal(event.staker, staker.address)
+        assert.equal(+event.period, nextPeriod)
+        assert.equal(+event.spankPoints, +spankPoints)
+        assert.equal(+event.spankAmount, staker.stake)
+        assert.equal(+event.stakePeriods, staker.periods)
+      }
     }
 
     // verify aggregate values
@@ -158,6 +198,9 @@ contract('SpankBank', (accounts) => {
     // spankBank SPANK increased
     const spankbankSpankBalance = await spankToken.balanceOf(spankbank.address)
     assert.equal(+spankbankSpankBalance, expectedTotalSpankStaked)
+
+
+
   }
 
   const calcSpankPoints = (periods, stake) => {
@@ -202,6 +245,8 @@ contract('SpankBank', (accounts) => {
       bootyBase : accounts[3],
       periods: 12
     }
+
+    // filter = web3.eth.filter({ address: spankbank.address, fromBlock: 0 })
   })
 
   afterEach(async () => {
@@ -237,6 +282,11 @@ contract('SpankBank', (accounts) => {
         assert.equal(points, calcSpankPoints(stakePeriods, 100))
         stakePeriods++
       }
+
+      // TODO test event params
+      const bankBlock = await getBlock(web3.eth.blockNumber - 3)
+      const bankTxHash = bankBlock.transactions[0]
+      const bankTx = await getTransaction(bankTxHash)
     })
   })
 
@@ -247,17 +297,16 @@ contract('SpankBank', (accounts) => {
       await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
     })
 
-    it('0.1 happy case - stake directly', async () => {
-      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
-
-      await verifyStake(staker1)
+    it('0.1 happy case - stake directly + event', async () => {
+      const tx = await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+      await verifyStake(staker1, tx)
     })
 
-    it('0.2 happy case - move forward before staking', async () => {
+    it('0.2 happy case - move forward before staking + event', async () => {
       await moveForwardPeriods(1)
-      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+      const tx = await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
 
-      await verifyStake(staker1)
+      await verifyStake(staker1, tx)
     })
 
     it('0.3 happy case - receive approval', async () => {
@@ -298,16 +347,16 @@ contract('SpankBank', (accounts) => {
       await verifyStake(staker1)
     })
 
-    it('0.6 happy case - two stakers', async () => {
-      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+    it('0.6 happy case - two stakers + event', async () => {
+      const tx1 = await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
 
       // must xfer SPANK to staker2 and approve
       await spankToken.transfer(staker2.address, staker2.stake, {from: owner})
       await spankToken.approve(spankbank.address, staker2.stake, {from: staker2.address})
 
-      await spankbank.stake(staker2.stake, staker2.periods, staker2.delegateKey, staker2.bootyBase, {from : staker2.address})
+      const tx2 = await spankbank.stake(staker2.stake, staker2.periods, staker2.delegateKey, staker2.bootyBase, {from : staker2.address})
 
-      await verifyStake([staker1, staker2])
+      await verifyStake([staker1, staker2], [tx1, tx2])
     })
 
     it('0.7 happy case - two stakers, both using receive approval', async () => {
@@ -552,10 +601,6 @@ contract('SpankBank', (accounts) => {
       currentPeriod = +(await spankbank.currentPeriod())
     })
 
-    it('1. minting during period 0', async () => {
-      await spankbank.mintBooty().should.be.rejectedWith(SolRevert)
-    })
-
     it('0.1 happy case - above target supply -> no new booty', async () => {
       await moveForwardPeriods(1)
       await spankbank.mintBooty()
@@ -587,6 +632,10 @@ contract('SpankBank', (accounts) => {
 
       const spankbankBootyBalance = await bootyToken.balanceOf.call(spankbank.address)
       assert.equal(+spankbankBootyBalance, fees * 20)
+    })
+
+    it('1. minting during period 0', async () => {
+      await spankbank.mintBooty().should.be.rejectedWith(SolRevert)
     })
 
     it('2. minting already complete', async () => {
