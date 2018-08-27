@@ -1,18 +1,18 @@
 {
     "token": {
-        "totalSupply" : 1000000000000000000000000000,
+        "totalSupply" : "1000000000000000000000000000",
         "name": "SPANK",
-        "decimals": 18,
+        "decimals": "18",
         "symbol": "SPANK"
     },
     "spankbank": {
-        "periodLength": 2592000,
-        "initialBootySupply": 10000000000000000000000,
-        "maxPeriods": 12
+        "periodLength": "2592000",
+        "initialBootySupply": "10000000000000000000000",
+        "maxPeriods": "12"
     },
     "booty": {
         "name": "BOOTY",
-        "decimals": 18,
+        "decimals": "18",
         "symbol": "BOOTY"
     }
 }
