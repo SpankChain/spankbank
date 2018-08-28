@@ -62,7 +62,7 @@ function getEventParams(tx, event) {
       }
     }
   }
-  return false  
+  return false
 }
 
 async function getPeriod(period) {
@@ -141,7 +141,7 @@ contract('SpankBank', (accounts) => {
 })
 
 contract('SpankBank', (accounts) => {
-    before('deploy', async () => {    
+    before('deploy', async () => {
       await restore()
       owner = accounts[0]
       firstMsig = accounts[0]
@@ -151,7 +151,7 @@ contract('SpankBank', (accounts) => {
       bootyAddress = await spankbank.bootyToken()
       bootyToken = await BootyToken.at(bootyAddress)
       multisig = await MultiSigWallet.deployed()
-      
+
       maxPeriods = parseInt(await spankbank.maxPeriods())
       initialPeriodData = await spankbank.periods(0)
       startTime = parseInt(initialPeriodData[4])
@@ -165,13 +165,13 @@ contract('SpankBank', (accounts) => {
         bootyBase : multisig.address,
         periods : 12
       }
-  
+
       await spankToken.transfer(msStaker.address, 1000000000000000000000, {from: owner})
       await bootyToken.transfer(msStaker.address, 1000000000000000000000, {from: owner})
-      
+
       multiSigStake = multiSigStake(spankbank.address, msStaker.delegateKey, msStaker.bootyBase, msStaker.stake, msStaker.periods)
     })
-  
+
     describe('multi-sig stake', () => {
       it('submit first multi-sig tx', async () => {
         await multisig.submitTransaction(spankToken.address, 0, multiSigStake, {from:firstMsig})
@@ -189,15 +189,15 @@ contract('SpankBank', (accounts) => {
       it('verify Execution event', async () => {
         getEventParams(confirmTx, "Execution").transactionId.should.be.bignumber.equal(0)
       })
-        
+
       it('verify multi-sig tx is confirmed', async () => {
         isConfirmed = await multisig.isConfirmed(0)
         expect(isConfirmed).to.be.true
       })
-        
+
       it('verify multi-sig tx address', async () => {
         tx = await multisig.transactions(0)
-        tx[0].should.be.equal(spankToken.address)  
+        tx[0].should.be.equal(spankToken.address)
       })
 
       it('verify multi-sig tx value', async () => {
@@ -209,7 +209,7 @@ contract('SpankBank', (accounts) => {
       })
 
       it('verify multi-sig tx executed bool', async () => {
-        tx[3].should.be.true      
+        tx[3].should.be.true
       })
 
       it('verify multi-sig staker address', async () => {
@@ -240,7 +240,7 @@ contract('SpankBank', (accounts) => {
         await moveForwardPeriods(1)
         await spankbank.updatePeriod()
       })
-      
+
       it('submit first multi-sig tx for checkIn()', async () => {
         await multisig.submitTransaction(spankbank.address, 0, multiSigCheckIn(13), {from:secondMsig})
       })
@@ -267,7 +267,7 @@ contract('SpankBank', (accounts) => {
 
       it('verify multi-sig tx for checkIn() address', async () => {
         tx = await multisig.transactions(1)
-        tx[0].should.be.equal(spankbank.address)  
+        tx[0].should.be.equal(spankbank.address)
       })
 
       it('verify multi-sig tx for checkIn() value', async () => {
@@ -275,11 +275,11 @@ contract('SpankBank', (accounts) => {
       })
 
       it('verify multi-sig tx for checkIn() encoded data', async () => {
-        tx[2].should.be.equal(multiSigCheckIn(13))    
+        tx[2].should.be.equal(multiSigCheckIn(13))
       })
 
       it('verify multi-sig tx for checkIn() executed bool', async () => {
-        tx[3].should.be.true      
+        tx[3].should.be.true
       })
 
       it('verify multi-sig staker address for checkIn()', async () => {
@@ -292,7 +292,7 @@ contract('SpankBank', (accounts) => {
       })
     })
 
-    describe('multi-sig mintBooty', () => {      
+    describe('multi-sig mintBooty', () => {
       it('submit first multi-sig tx for mintBooty()', async () => {
         await multisig.submitTransaction(spankbank.address, 0, multiSigMintBooty(), {from:firstMsig})
       })
@@ -319,7 +319,7 @@ contract('SpankBank', (accounts) => {
 
       it('verify multi-sig tx for mintBooty() address', async () => {
         tx = await multisig.transactions(2)
-        tx[0].should.be.equal(spankbank.address)  
+        tx[0].should.be.equal(spankbank.address)
       })
 
       it('verify multi-sig tx for mintBooty() value', async () => {
@@ -327,11 +327,11 @@ contract('SpankBank', (accounts) => {
       })
 
       it('verify multi-sig tx for mintBooty() encoded data', async () => {
-        tx[2].should.be.equal(multiSigMintBooty())    
+        tx[2].should.be.equal(multiSigMintBooty())
       })
 
       it('verify multi-sig tx for mintBooty() executed bool', async () => {
-        tx[3].should.be.true      
+        tx[3].should.be.true
       })
 
       it('verify period for mintBooty()', async () => {
@@ -345,8 +345,8 @@ contract('SpankBank', (accounts) => {
         await moveForwardPeriods(1)
         await spankbank.updatePeriod()
       })
-      
-      it('submit first multi-sig tx for claimBooty()', async () => {      
+
+      it('submit first multi-sig tx for claimBooty()', async () => {
         await multisig.submitTransaction(spankbank.address, 0, multiSigClaimBooty(0), {from:secondMsig})
       })
 
@@ -372,7 +372,7 @@ contract('SpankBank', (accounts) => {
 
       it('verify multi-sig tx for claimBooty() address', async () => {
         tx = await multisig.transactions(3)
-        tx[0].should.be.equal(spankbank.address)  
+        tx[0].should.be.equal(spankbank.address)
       })
 
       it('verify multi-sig tx for claimBooty() value', async () => {
@@ -380,11 +380,11 @@ contract('SpankBank', (accounts) => {
       })
 
       it('verify multi-sig tx for claimBooty() encoded data', async () => {
-        tx[2].should.be.equal(multiSigClaimBooty(0))    
+        tx[2].should.be.equal(multiSigClaimBooty(0))
       })
 
       it('verify multi-sig tx for claimBooty() executed bool', async () => {
-        tx[3].should.be.true      
+        tx[3].should.be.true
       })
 
       it('verify multi-sig staker address for claimBooty()', async () => {
@@ -393,8 +393,8 @@ contract('SpankBank', (accounts) => {
       })
     })
 
-    describe('multi-sig splitStake', () => {      
-      it('submit first multi-sig tx for splitStake()', async () => {      
+    describe('multi-sig splitStake', () => {
+      it('submit first multi-sig tx for splitStake()', async () => {
         await multisig.submitTransaction(spankbank.address, 0, multiSigSplitStake(accounts[9], accounts[8], accounts[7], 1), {from:firstMsig})
       })
 
@@ -420,7 +420,7 @@ contract('SpankBank', (accounts) => {
 
       it('verify multi-sig tx for splitStake() address', async () => {
         tx = await multisig.transactions(4)
-        tx[0].should.be.equal(spankbank.address)  
+        tx[0].should.be.equal(spankbank.address)
       })
 
       it('verify multi-sig tx for splitStake() value', async () => {
@@ -428,11 +428,11 @@ contract('SpankBank', (accounts) => {
       })
 
       it('verify multi-sig tx for splitStake() encoded data', async () => {
-        tx[2].should.be.equal(multiSigSplitStake(accounts[9], accounts[8], accounts[7], 1))    
+        tx[2].should.be.equal(multiSigSplitStake(accounts[9], accounts[8], accounts[7], 1))
       })
 
       it('verify multi-sig tx for splitStake() executed bool', async () => {
-        tx[3].should.be.true      
+        tx[3].should.be.true
       })
 
       it('verify split staker address for splitStake()', async () => {
@@ -444,11 +444,11 @@ contract('SpankBank', (accounts) => {
       it('verify split delegateKey address for splitStake()', async () => {
         msSplitStaker.delegateKey.should.be.equal(accounts[8])
       })
-      
+
       it('verify split bootyBase address for splitStake()', async () => {
         msSplitStaker.bootyBase.should.be.equal(accounts[7])
       })
-        
+
       it('verify split stake splitStake()', async () => {
         msSplitStaker.stake.should.be.bignumber.equal(1)
       })
@@ -462,8 +462,8 @@ contract('SpankBank', (accounts) => {
       })
     })
 
-    describe('multi-sig updateDelegateKey', () => {      
-      it('submit first multi-sig tx for updateDelegateKey()', async () => {      
+    describe('multi-sig updateDelegateKey', () => {
+      it('submit first multi-sig tx for updateDelegateKey()', async () => {
         await multisig.submitTransaction(spankbank.address, 0, multiSigUpdateDelegateKey(accounts[6]), {from:secondMsig})
       })
 
@@ -489,7 +489,7 @@ contract('SpankBank', (accounts) => {
 
       it('verify multi-sig tx for updateDelegateKey() address', async () => {
         tx = await multisig.transactions(5)
-        tx[0].should.be.equal(spankbank.address)  
+        tx[0].should.be.equal(spankbank.address)
       })
 
       it('verify multi-sig tx for updateDelegateKey() value', async () => {
@@ -497,11 +497,11 @@ contract('SpankBank', (accounts) => {
       })
 
       it('verify multi-sig tx for updateDelegateKey() encoded data', async () => {
-        tx[2].should.be.equal(multiSigUpdateDelegateKey(accounts[6]))    
+        tx[2].should.be.equal(multiSigUpdateDelegateKey(accounts[6]))
       })
 
       it('verify multi-sig tx for updateDelegateKey() executed bool', async () => {
-        tx[3].should.be.true      
+        tx[3].should.be.true
       })
 
       it('verify delegateKey for updateDelegateKey()', async () => {
@@ -510,8 +510,8 @@ contract('SpankBank', (accounts) => {
       })
     })
 
-    describe('multi-sig updateBootyBase', () => {      
-      it('submit first multi-sig tx for updateBootyBase()', async () => {      
+    describe('multi-sig updateBootyBase', () => {
+      it('submit first multi-sig tx for updateBootyBase()', async () => {
         await multisig.submitTransaction(spankbank.address, 0, multiSigUpdateBootyBase(accounts[5]), {from:firstMsig})
       })
 
@@ -537,7 +537,7 @@ contract('SpankBank', (accounts) => {
 
       it('verify multi-sig tx for updateBootyBase() address', async () => {
         tx = await multisig.transactions(6)
-        tx[0].should.be.equal(spankbank.address)  
+        tx[0].should.be.equal(spankbank.address)
       })
 
       it('verify multi-sig tx for updateBootyBase() value', async () => {
@@ -545,21 +545,21 @@ contract('SpankBank', (accounts) => {
       })
 
       it('verify multi-sig tx for updateBootyBase() encoded data', async () => {
-        tx[2].should.be.equal(multiSigUpdateBootyBase(accounts[5]))    
+        tx[2].should.be.equal(multiSigUpdateBootyBase(accounts[5]))
       })
 
       it('verify multi-sig tx for updateBootyBase() executed bool', async () => {
-        tx[3].should.be.true      
+        tx[3].should.be.true
       })
 
       it('verify delegateKey for updateBootyBase()', async () => {
         msBankedStaker = await getStaker(msStaker.address)
         msBankedStaker.bootyBase.should.be.equal(accounts[5])
       })
-    })    
+    })
 
-    describe('multi-sig approve (for sendFees)', () => {      
-      it('submit first multi-sig tx for approve()', async () => {      
+    describe('multi-sig approve (for sendFees)', () => {
+      it('submit first multi-sig tx for approve()', async () => {
         await multisig.submitTransaction(bootyToken.address, 0, multiSigApprove(spankbank.address, 1000000000000000000000000), {from:secondMsig})
       })
 
@@ -585,7 +585,7 @@ contract('SpankBank', (accounts) => {
 
       it('verify multi-sig tx for approve() address', async () => {
         tx = await multisig.transactions(7)
-        tx[0].should.be.equal(bootyToken.address)  
+        tx[0].should.be.equal(bootyToken.address)
       })
 
       it('verify multi-sig tx for approve() value', async () => {
@@ -593,16 +593,16 @@ contract('SpankBank', (accounts) => {
       })
 
       it('verify multi-sig tx for approve() encoded data', async () => {
-        tx[2].should.be.equal(multiSigApprove(spankbank.address, 1000000000000000000000000))    
+        tx[2].should.be.equal(multiSigApprove(spankbank.address, 1000000000000000000000000))
       })
 
       it('verify multi-sig tx for approve() executed bool', async () => {
-        tx[3].should.be.true      
+        tx[3].should.be.true
       })
-    })  
-    
-    describe('multi-sig sendFees', () => {      
-      it('submit first multi-sig tx for sendFees()', async () => {      
+    })
+
+    describe('multi-sig sendFees', () => {
+      it('submit first multi-sig tx for sendFees()', async () => {
         await multisig.submitTransaction(spankbank.address, 0, multiSigSendFees(1), {from:firstMsig})
       })
 
@@ -628,7 +628,7 @@ contract('SpankBank', (accounts) => {
 
       it('verify multi-sig tx for sendFees() address', async () => {
         tx = await multisig.transactions(8)
-        tx[0].should.be.equal(spankbank.address)  
+        tx[0].should.be.equal(spankbank.address)
       })
 
       it('verify multi-sig tx for sendFees() value', async () => {
@@ -636,22 +636,22 @@ contract('SpankBank', (accounts) => {
       })
 
       it('verify multi-sig tx for sendFees() encoded data', async () => {
-        tx[2].should.be.equal(multiSigSendFees(1))    
+        tx[2].should.be.equal(multiSigSendFees(1))
       })
 
       it('verify multi-sig tx for sendFees() executed bool', async () => {
-        tx[3].should.be.true      
+        tx[3].should.be.true
       })
 
       it('verify multi-sig tx for sendFees() booty fees for period', async () => {
         currentPeriod = await spankbank.currentPeriod()
-        period = await getPeriod(parseInt(currentPeriod))  
+        period = await getPeriod(parseInt(currentPeriod))
         period.bootyFees.should.be.bignumber.equal(1)
       })
     })
-    
-    describe('multi-sig voteToClose', () => {      
-      it('submit first multi-sig tx for voteToClose()', async () => {      
+
+    describe('multi-sig voteToClose', () => {
+      it('submit first multi-sig tx for voteToClose()', async () => {
         await multisig.submitTransaction(spankbank.address, 0, multiSigVoteToClose(), {from:secondMsig})
       })
 
@@ -677,7 +677,7 @@ contract('SpankBank', (accounts) => {
 
       it('verify multi-sig tx for voteToClose() address', async () => {
         tx = await multisig.transactions(9)
-        tx[0].should.be.equal(spankbank.address)  
+        tx[0].should.be.equal(spankbank.address)
       })
 
       it('verify multi-sig tx for voteToClose() value', async () => {
@@ -685,11 +685,11 @@ contract('SpankBank', (accounts) => {
       })
 
       it('verify multi-sig tx for voteToClose() encoded data', async () => {
-        tx[2].should.be.equal(multiSigVoteToClose())    
+        tx[2].should.be.equal(multiSigVoteToClose())
       })
 
       it('verify multi-sig tx for voteToClose() executed bool', async () => {
-        tx[3].should.be.true      
+        tx[3].should.be.true
       })
 
       it('verify multi-sig tx for voteToClose() vote for period', async () => {
@@ -697,15 +697,15 @@ contract('SpankBank', (accounts) => {
         getVoteData = await spankbank.getVote(msStaker.address, parseInt(currentPeriod))
         getVoteData.should.be.true
       })
-    })    
+    })
 
-    describe('multi-sig withdrawStake', () => {      
-      it('fast forward past staker endingPeriod', async () => {   
+    describe('multi-sig withdrawStake', () => {
+      it('fast forward past staker endingPeriod', async () => {
         msBankedStaker = await getStaker(msStaker.address)
         await moveForwardPeriods(parseInt(msBankedStaker.endingPeriod) + 1)
         await spankbank.updatePeriod()
       })
-      it('submit first multi-sig tx for withdrawStake()', async () => {      
+      it('submit first multi-sig tx for withdrawStake()', async () => {
         await multisig.submitTransaction(spankbank.address, 0, multiSigWithdrawStake(), {from:firstMsig})
       })
 
@@ -731,7 +731,7 @@ contract('SpankBank', (accounts) => {
 
       it('verify multi-sig tx for withdrawStake() address', async () => {
         tx = await multisig.transactions(10)
-        tx[0].should.be.equal(spankbank.address)  
+        tx[0].should.be.equal(spankbank.address)
       })
 
       it('verify multi-sig tx for withdrawStake() value', async () => {
@@ -739,16 +739,16 @@ contract('SpankBank', (accounts) => {
       })
 
       it('verify multi-sig tx for withdrawStake() encoded data', async () => {
-        tx[2].should.be.equal(multiSigWithdrawStake())    
+        tx[2].should.be.equal(multiSigWithdrawStake())
       })
 
       it('verify multi-sig tx for withdrawStake() executed bool', async () => {
-        tx[3].should.be.true      
+        tx[3].should.be.true
       })
 
       it('verify multi-sig tx for withdrawStake() vote for period', async () => {
         msBankedStaker = await getStaker(msStaker.address)
         msBankedStaker.stake.should.be.bignumber.equal(0)
       })
-    })    
+    })
   })

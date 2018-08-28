@@ -79,13 +79,6 @@ async function moveForwardPeriods(periods) {
   return true
 }
 
-function validateSplitStakeEvent(amount, staker, splitStaker, ev) {
-  ev.staker.should.be.equal(staker.address)
-  ev.newAddress.should.be.equal(splitStaker.address)
-  ev.spankAmount.should.be.bignumber.equal(amount)
-  return true
-}
-
 function getEventParams(tx, event) {
   if (tx.logs.length > 0) {
     for (let idx=0; idx < tx.logs.length; idx++) {
@@ -119,8 +112,38 @@ function multiSigStake(spankAmount, stakePeriods, delegateKey, bootyBase) {
   return '0x40809acd' + decToBytes(spankAmount) + decToBytes(stakePeriods) + addrToBytes(delegateKey) + addrToBytes(bootyBase)
 }
 
+function multiSigCheckIn(updatedEndingPeriod) {
+  return '0xe95a644f' + decToBytes(updatedEndingPeriod)
+}
+
+function multiSigClaimBooty(_period) {
+  return '0xa0ac5776' + decToBytes(_period)
+}
+
+function multiSigSplitStake(newAddress, newDelegateKey, newBootyBase, spankAmount) {
+  return '0xb8c0517a' + addrToBytes(newAddress) + addrToBytes(newDelegateKey) + addrToBytes(newBootyBase) + decToBytes(spankAmount)
+}
+
+function multiSigUpdateDelegateKey(newDelegateKey) {
+  return '0x2582bf2a' + addrToBytes(newDelegateKey)
+}
+
+function multiSigUpdateBootyBase(newBootyBase) {
+  return '0x948cfd0c' + addrToBytes(newBootyBase)
+}
+
+function multiSigVoteToClose() {
+  return '0x2277466b'
+}
+
+function multiSigWithdrawStake() {
+  return '0xbed9d861'
+}
+
 contract('SpankBank', (accounts) => {
   let snapshotId
+
+  // Verify functions used across test sets declared here
 
   // input is a single staker or an array of stakers (same for txs)
   const verifyStake = async (stakers, txs) => {
@@ -196,10 +219,68 @@ contract('SpankBank', (accounts) => {
     // spankBank SPANK increased
     const spankbankSpankBalance = await spankToken.balanceOf(spankbank.address)
     assert.equal(+spankbankSpankBalance, expectedTotalSpankStaked)
-
-
-
   }
+
+  // assumes single staker receiving all minted booty
+  const verifyClaimBooty = async (staker, fees, claimPeriod) => {
+    const didClaimBooty = await spankbank.getDidClaimBooty.call(staker.address, claimPeriod)
+    assert.ok(didClaimBooty)
+
+    const stakerBootyBalance = await bootyToken.balanceOf.call(staker.bootyBase)
+    assert.equal(+stakerBootyBalance, fees * 20)
+
+    const bankBootyBalance = await bootyToken.balanceOf.call(spankbank.address)
+    assert.equal(+bankBootyBalance, 0)
+  }
+
+  const verifyUpdateDelegateKey = async (staker, newDelegateKey) => {
+    const bankedStaker = await spankbank.stakers(staker.address)
+    const updatedDelegateKey = bankedStaker[3]
+    assert.equal(updatedDelegateKey, newDelegateKey)
+
+    const stakerAddress = await spankbank.stakerByDelegateKey.call(newDelegateKey)
+    assert.equal(stakerAddress, staker.address)
+
+    const zeroAddress = await spankbank.stakerByDelegateKey.call(staker.delegateKey)
+    assert.equal(zeroAddress, '0x0000000000000000000000000000000000000000')
+  }
+
+  const verifyUpdateBootyBase = async (staker, newBootyBase) => {
+    const bankedStaker = await spankbank.stakers(staker.address)
+    const updatedBootyBase = bankedStaker[4]
+    assert.equal(updatedBootyBase, newBootyBase)
+  }
+
+  const verifySplitStake = async (staker1, staker2, splitAmount, totalSpankStaked) => {
+    // by default, assumes staker1.stake is totalSpankStaked
+    totalSpankStaked = totalSpankStaked ? totalSpankStaked : staker1.stake
+
+    const bankedStaker1 = await spankbank.stakers(staker1.address)
+    const bankedStaker2 = await spankbank.stakers(staker2.address)
+
+    // spankStaked should be added/subtracted properly
+    assert.equal(+bankedStaker1.spankStaked, staker1.stake - splitAmount)
+    assert.equal(+bankedStaker2.spankStaked, splitAmount)
+
+    // starting period should be same as staker1
+    assert.equal(+bankedStaker1.startingPeriod, +bankedStaker2.startingPeriod)
+
+    // ending period should be same as staker1
+    assert.equal(+bankedStaker1.endingPeriod, +bankedStaker2.endingPeriod)
+
+    // delegateKey and bootyBase are properly set
+    assert.equal(bankedStaker2.delegateKey, staker2.delegateKey)
+    assert.equal(bankedStaker2.bootyBase, staker2.bootyBase)
+
+    // spankBank SPANK remains the same
+    const spankbankSpankBalance = await spankToken.balanceOf(spankbank.address)
+    assert.equal(+spankbankSpankBalance, totalSpankStaked)
+
+    // stakerByDelegateKey -> set
+    const stakerAddress2 = await spankbank.getStakerFromDelegateKey(staker2.delegateKey)
+    assert.equal(stakerAddress2, staker2.address)
+  }
+
 
   const calcSpankPoints = (periods, stake) => {
     return (((periods * 5) + 40) * stake) / 100
@@ -244,6 +325,16 @@ contract('SpankBank', (accounts) => {
       periods: 12
     }
 
+    msStaker = {
+      address : multisig.address,
+      stake : 100,
+      delegateKey : multisig.address,
+      bootyBase : multisig.address,
+      periods : 12,
+      key1: accounts[0],
+      key2: accounts[1]
+    }
+
     // filter = web3.eth.filter({ address: spankbank.address, fromBlock: 0 })
   })
 
@@ -282,9 +373,11 @@ contract('SpankBank', (accounts) => {
       }
 
       // TODO test event params
+      /*
       const bankBlock = await getBlock(web3.eth.blockNumber - 3)
       const bankTxHash = bankBlock.transactions[0]
       const bankTx = await getTransaction(bankTxHash)
+      */
     })
   })
 
@@ -315,24 +408,13 @@ contract('SpankBank', (accounts) => {
     })
 
     it('0.4 happy case - multisig stake', async () => {
-      const msKey1 = accounts[0]
-      const msKey2 = accounts[1]
-
-      const msStaker = {
-        address : multisig.address,
-        stake : 100,
-        delegateKey : multisig.address,
-        bootyBase : multisig.address,
-        periods : 12
-      }
-
       await spankToken.transfer(msStaker.address, msStaker.stake, {from: owner})
 
-      await multisig.submitTransaction(spankToken.address, 0, multiSigApprove(spankbank.address, msStaker.stake), {from:msKey1})
-      approveTx = await multisig.confirmTransaction(0, {from:msKey2})
+      await multisig.submitTransaction(spankToken.address, 0, multiSigApprove(spankbank.address, msStaker.stake), {from:msStaker.key1})
+      approveTx = await multisig.confirmTransaction(0, {from:msStaker.key2})
 
-      await multisig.submitTransaction(spankbank.address, 0, multiSigStake(msStaker.stake, msStaker.periods, msStaker.delegateKey, msStaker.bootyBase, {from : msKey1}))
-      stakeTx = await multisig.confirmTransaction(1, {from:msKey2})
+      await multisig.submitTransaction(spankbank.address, 0, multiSigStake(msStaker.stake, msStaker.periods, msStaker.delegateKey, msStaker.bootyBase, {from : msStaker.key1}))
+      stakeTx = await multisig.confirmTransaction(1, {from:msStaker.key2})
 
       await verifyStake(msStaker)
     })
@@ -800,18 +882,6 @@ contract('SpankBank', (accounts) => {
   })
 
   describe('claiming BOOTY has four requirements\n\t1. staker spankpoints > 0 for period\n\t2. staker must not have claimed for claiming period\n\t3. minting of booty must have been completed for the claiming period\n\t4.transfer complete (not verified in tests)\n', () => {
-    // assumes single staker receiving all minted booty
-    const verifyClaimBooty = async (staker, fees, claimPeriod) => {
-      const didClaimBooty = await spankbank.getDidClaimBooty.call(staker.address, claimPeriod)
-      assert.ok(didClaimBooty)
-
-      const stakerBootyBalance = await bootyToken.balanceOf.call(staker.bootyBase)
-      assert.equal(+stakerBootyBalance, fees * 20)
-
-      const bankBootyBalance = await bootyToken.balanceOf.call(spankbank.address)
-      assert.equal(+bankBootyBalance, 0)
-    }
-
     beforeEach(async () => {
       // sending 100% of BOOTY as fees -> results in booty supply of 20x fees
       fees = data.spankbank.initialBootySupply
@@ -1004,36 +1074,6 @@ contract('SpankBank', (accounts) => {
 
   describe('splitStake has eight requirements\n\t1. the new staker address is not address(0)\n\t2. the new delegateKey is not address(0)\n\t3. the new bootyBase is not address(0)\n\t4. the new delegateKey is not already in use\n\t5. the stake amount to be split is greater than zero\n\t6. the current period is less than the stakers ending period\n\t7. the amount to be split is less than or equal to staker\'s stake\n\t8. the staker has no spank points for current period (has not yet checked in)\n', () => {
 
-    const verifySplitStake = async (staker1, staker2, splitAmount, totalSpankStaked) => {
-      // by default, assumes staker1.stake is totalSpankStaked
-      totalSpankStaked = totalSpankStaked ? totalSpankStaked : staker1.stake
-
-      const bankedStaker1 = await spankbank.stakers(staker1.address)
-      const bankedStaker2 = await spankbank.stakers(staker2.address)
-
-      // spankStaked should be added/subtracted properly
-      assert.equal(+bankedStaker1.spankStaked, staker1.stake - splitAmount)
-      assert.equal(+bankedStaker2.spankStaked, splitAmount)
-
-      // starting period should be same as staker1
-      assert.equal(+bankedStaker1.startingPeriod, +bankedStaker2.startingPeriod)
-
-      // ending period should be same as staker1
-      assert.equal(+bankedStaker1.endingPeriod, +bankedStaker2.endingPeriod)
-
-      // delegateKey and bootyBase are properly set
-      assert.equal(bankedStaker2.delegateKey, staker2.delegateKey)
-      assert.equal(bankedStaker2.bootyBase, staker2.bootyBase)
-
-      // spankBank SPANK remains the same
-      const spankbankSpankBalance = await spankToken.balanceOf(spankbank.address)
-      assert.equal(+spankbankSpankBalance, totalSpankStaked)
-
-      // stakerByDelegateKey -> set
-      const stakerAddress2 = await spankbank.getStakerFromDelegateKey(staker2.delegateKey)
-      assert.equal(stakerAddress2, staker2.address)
-    }
-
     beforeEach(async () => {
       // we split the entire stake by default
       splitAmount = staker1.stake
@@ -1209,18 +1249,6 @@ contract('SpankBank', (accounts) => {
 
   describe('updating delegate key has three requirements\n\t1. new delegate key address is not address(0)\n\t2. delegate key is not already in use\n\t3. staker has a valid delegate key to update\n', () => {
 
-    const verifyUpdateDelegateKey = async (staker, newDelegateKey) => {
-      const bankedStaker = await spankbank.stakers(staker.address)
-      const updatedDelegateKey = bankedStaker[3]
-      assert.equal(updatedDelegateKey, newDelegateKey)
-
-      const stakerAddress = await spankbank.stakerByDelegateKey.call(newDelegateKey)
-      assert.equal(stakerAddress, staker.address)
-
-      const zeroAddress = await spankbank.stakerByDelegateKey.call(staker.delegateKey)
-      assert.equal(zeroAddress, '0x0000000000000000000000000000000000000000')
-    }
-
     beforeEach(async () => {
       newDelegateKey = accounts[2]
 
@@ -1290,12 +1318,6 @@ contract('SpankBank', (accounts) => {
   })
 
   describe('updating booty base has one requirement\n\t1. staker must have SPANK staked', () => {
-
-    const verifyUpdateBootyBase = async (staker, newBootyBase) => {
-      const bankedStaker = await spankbank.stakers(staker.address)
-      const updatedBootyBase = bankedStaker[4]
-      assert.equal(updatedBootyBase, newBootyBase)
-    }
 
     beforeEach(async () => {
       newBootyBase = accounts[2]
@@ -1579,6 +1601,116 @@ contract('SpankBank', (accounts) => {
       assert.equal(+spankStaker1.spankStaked, 0)
 
       await spankbank.withdrawStake({from: staker1.address}).should.be.rejectedWith('staker has no stake')
+    })
+  })
+
+  describe('multisig happy path tests', () => {
+    beforeEach(async () => {
+      await spankToken.transfer(msStaker.address, msStaker.stake, {from: owner})
+
+      // approve
+      await multisig.submitTransaction(spankToken.address, 0, multiSigApprove(spankbank.address, msStaker.stake), {from:msStaker.key1})
+      await multisig.confirmTransaction(0, {from:msStaker.key2})
+
+      // stake
+      await multisig.submitTransaction(spankbank.address, 0, multiSigStake(msStaker.stake, msStaker.periods, msStaker.delegateKey, msStaker.bootyBase, {from : msStaker.key1}))
+      await multisig.confirmTransaction(1, {from:msStaker.key2})
+    })
+
+    it('checkIn', async () => {
+      await moveForwardPeriods(1)
+      await spankbank.updatePeriod()
+      currentPeriod = +(await spankbank.currentPeriod())
+      nextPeriod = currentPeriod + 1
+
+      await multisig.submitTransaction(spankbank.address, 0, multiSigCheckIn(0), {from:msStaker.key1})
+      await multisig.confirmTransaction(2, {from:msStaker.key2})
+
+      const bankedStaker = await spankbank.stakers(msStaker.address)
+      const {endingPeriod} = bankedStaker
+      assert.equal(endingPeriod, currentPeriod + msStaker.periods - 1)
+
+      const spankPoints = await spankbank.getSpankPoints.call(msStaker.address, nextPeriod)
+      const periodsRemaining = endingPeriod - currentPeriod
+      assert.equal(spankPoints, calcSpankPoints(periodsRemaining, msStaker.stake))
+
+      const period = await spankbank.periods(nextPeriod)
+      const {totalSpankPoints} = period
+      assert.equal(+totalSpankPoints, +spankPoints)
+    })
+
+    it('claimBooty', async () => {
+      fees = data.spankbank.initialBootySupply
+      await moveForwardPeriods(1)
+      await bootyToken.approve(spankbank.address, fees, {from: owner})
+      await spankbank.sendFees(fees, {from: owner})
+
+      await moveForwardPeriods(1)
+      await spankbank.mintBooty()
+
+      previousPeriod = +(await spankbank.currentPeriod()) - 1
+
+      await multisig.submitTransaction(spankbank.address, 0, multiSigClaimBooty(previousPeriod), {from:msStaker.key1})
+      await multisig.confirmTransaction(2, {from:msStaker.key2})
+      await verifyClaimBooty(msStaker, fees, previousPeriod)
+    })
+
+    it('updateDelegateKey', async () => {
+      const newDelegateKey = accounts[2]
+      await multisig.submitTransaction(spankbank.address, 0, multiSigUpdateDelegateKey(newDelegateKey), {from:msStaker.key1})
+      await multisig.confirmTransaction(2, {from:msStaker.key2})
+      await verifyUpdateDelegateKey(msStaker, newDelegateKey)
+    })
+
+    it('updateBootyBase', async () => {
+      const newBootyBase = accounts[2]
+      await multisig.submitTransaction(spankbank.address, 0, multiSigUpdateBootyBase(newBootyBase), {from:msStaker.key1})
+      await multisig.confirmTransaction(2, {from:msStaker.key2})
+      await verifyUpdateBootyBase(msStaker, newBootyBase)
+    })
+
+    it('splitStake', async () => {
+      const splitAmount = msStaker.stake
+      await moveForwardPeriods(1)
+      await multisig.submitTransaction(spankbank.address, 0, multiSigSplitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount), {from: msStaker.key1})
+      await multisig.confirmTransaction(2, {from:msStaker.key2})
+      await verifySplitStake(msStaker, staker2, splitAmount)
+    })
+
+    it('voteToClose', async () => {
+      currentPeriod = +(await spankbank.currentPeriod())
+
+      await multisig.submitTransaction(spankbank.address, 0, multiSigVoteToClose(), {from: msStaker.key1})
+      await multisig.confirmTransaction(2, {from:msStaker.key2})
+
+      const periodData = await spankbank.periods(currentPeriod)
+      const closingVotes = periodData[6]
+      assert.equal(+closingVotes, msStaker.stake)
+
+      const votedToClose = await spankbank.getVote(msStaker.address, currentPeriod)
+      assert.equal(votedToClose, true)
+
+      const isClosed = await spankbank.isClosed.call()
+      assert.ok(isClosed)
+    })
+
+    it('withdrawStake', async () => {
+      await moveForwardPeriods(msStaker.periods + 1)
+
+      await multisig.submitTransaction(spankbank.address, 0, multiSigWithdrawStake(), {from: msStaker.key1})
+      await multisig.confirmTransaction(2, {from:msStaker.key2})
+
+      const stakerSpankBalance = +(await spankToken.balanceOf.call(msStaker.address))
+      assert.equal(stakerSpankBalance, msStaker.stake)
+
+      const spankmsStaker = await spankbank.stakers(msStaker.address)
+      assert.equal(+spankmsStaker.spankStaked, 0)
+
+      const bankSpankBalance = +(await spankToken.balanceOf.call(spankbank.address))
+      assert.equal(bankSpankBalance, 0)
+
+      const totalSpankStaked = +(await spankbank.totalSpankStaked.call())
+      assert.equal(totalSpankStaked, 0)
     })
   })
 })
