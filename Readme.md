@@ -18,6 +18,8 @@ SPANK holders can stake their SPANK tokens with the SpankBank for up to 12 (30 d
 
 If stakers want to only partially extend their stake (e.g. extend only 50% of their stake by an additional month, not all of it) or to transfer some of their stake to a new address (e.g. for security reasons) they can do so by calling the `splitStake` function.
 
+If stakers want to close the SpankBank and be able to withdraw early (e.g. in case of catastrophic bug or planned upgrade), they can call the `voteToClose` function. If stakers accounting for more than 50% of the staked SPANK call `voteToClose` in the same period, the SpankBank will immediately transition to a "closed" state and allow stakers to withdraw early.
+
 ## Data Structures
 
 #### Global Constants
@@ -49,18 +51,26 @@ If a staker stakes for 12 periods but doesn't opt to extend their stake during c
 
 `uint256 public currentPeriod = 0;` - the current period number
 
+`uint256 public totalSpankStaked;` - the total SPANK staked across all stakers
+
+`bool public isClosed;` - true if voteToClose has passed, allows early withdrawals
+
 ##### Stakers
 
 The `Staker` struct stores all releveant data for each staker, and is saved in the `stakers` mapping by the staker's address.
 
 ```
-  struct Staker {
-    uint256 spankStaked; // the amount of spank staked
-    uint256 startingPeriod; // the period this staker started staking (e.g. 1)
-    uint256 endingPeriod; // the period after which this stake expires (e.g. 12)
-    mapping(uint256 => uint256) spankPoints; // the spankPoints per period
-    mapping(uint256 => bool) didClaimBooty; // true if staker claimed BOOTY for that period
-  }
+    struct Staker {
+        uint256 spankStaked; // the amount of spank staked
+        uint256 startingPeriod; // the period this staker started staking
+        uint256 endingPeriod; // the period after which this stake expires
+        mapping(uint256 => uint256) spankPoints; // the spankPoints per period
+        mapping(uint256 => bool) didClaimBooty; // true if staker claimed BOOTY for that period
+        mapping(uint256 => bool) votedToClose; // true if staker voted to close for
+        that period
+        address delegateKey; // address used to call checkIn and claimBooty
+        address bootyBase; // destination address to receive BOOTY
+    }
 
   mapping(address => Staker) public stakers;
 ```
@@ -70,14 +80,16 @@ The `staker.spankPoints` mapping stores the staker's spank points for each perio
 
 The `Period` struct stores all releveant data for each period, and is saved in the `periods` mapping by the period number.
 ```
-  struct Period {
-    uint256 bootyFees; // the amount of BOOTY collected in fees
-    uint256 totalSpankPoints; // the total spankPoints of all stakers
-    uint256 bootyMinted; // the amount of BOOTY minted
-    bool mintingComplete; // true if BOOTY has already been minted for this period
-    uint256 startTime; // the starting unix timestamp in seconds
-    uint256 endTime; // the ending unix timestamp in seconds
-  }
+    struct Period {
+        uint256 bootyFees; // the amount of BOOTY collected in fees
+        uint256 totalSpankPoints; // the total spankPoints of all stakers
+        uint256 bootyMinted; // the amount of BOOTY minted
+        bool mintingComplete; // true if BOOTY has already been minted for this period
+        uint256 startTime; // the starting unix timestamp in seconds
+        uint256 endTime; // the ending unix timestamp in seconds
+        uint256 closingVotes; // the total votes to close this period
+        uint256 totalStakedSpank; // the total SPANK staked
+    }
 
   mapping(uint256 => Period) public periods;
 ```
@@ -86,6 +98,7 @@ The data for each period is set in the following order:
 1. The `totalSpankPoints` are tallied during the previous period, as each staker calls the `stake` or `checkIn` functions.
 2. The `startTime` and `endTime` are set when the period starts, when the `updatePeriod` function is called.
 3. The `bootyFees` are tallied during the period, as the `sendFees` function is called.
+// TODO checkpoint...
 4. Once the period is over, `bootyMinted` and `mintingComplete` are set when the `mintBooty` function is called.
 
 ## Functions
