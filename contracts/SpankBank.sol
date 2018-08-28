@@ -86,8 +86,7 @@ contract SpankBank {
 
     event ReceiveApprovalEvent (
         address from,
-        address tokenContract,
-        bytes extraData
+        address tokenContract
     );
 
     /***********************************
@@ -248,7 +247,7 @@ contract SpankBank {
         address bootyBaseFromBytes = extraData.toAddress(44);
         uint256 periodFromBytes = extraData.toUint(64);
 
-        emit ReceiveApprovalEvent(from, tokenContract, extraData);
+        emit ReceiveApprovalEvent(from, tokenContract);
 
         doStake(from, amount, periodFromBytes, delegateKeyFromBytes, bootyBaseFromBytes);
         return true;
