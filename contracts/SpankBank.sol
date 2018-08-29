@@ -19,7 +19,7 @@ contract SpankBank {
     );
 
     event StakeEvent(
-        address indexed staker,
+        address staker,
         uint256 period,
         uint256 spankPoints,
         uint256 spankAmount,
@@ -27,52 +27,54 @@ contract SpankBank {
     );
 
     event SendFeesEvent (
-        address indexed sender,
+        address sender,
         uint256 bootyAmount
     );
 
     event MintBootyEvent (
-        uint256 indexed targetBootySupply,
-        uint256 indexed totalBootySupply
+        uint256 targetBootySupply,
+        uint256 totalBootySupply
     );
 
     event CheckInEvent (
-        address indexed staker,
+        address staker,
         uint256 period,
         uint256 spankPoints,
         uint256 stakerEndingPeriod
     );
 
     event ClaimBootyEvent (
-        address indexed staker,
-        uint256 indexed period,
-        uint256 indexed bootyOwed
+        address staker,
+        uint256 period,
+        uint256 bootyOwed
     );
 
     event WithdrawStakeEvent (
-        address indexed staker,
-        uint256 indexed totalSpankToWithdraw
+        address staker,
+        uint256 totalSpankToWithdraw
     );
 
     event SplitStakeEvent (
-        address indexed staker,
-        address indexed newAddress,
-        address indexed newDelegateKey,
+        address staker,
+        address newAddress,
+        address newDelegateKey,
         address newBootyBase,
         uint256 spankAmount
     );
 
     event VoteToCloseEvent (
-        address indexed staker,
+        address staker,
         uint256 period
     );
 
     event UpdateDelegateKeyEvent (
-        address indexed staker
+        address staker,
+        address newDelegateKey
     );
 
     event UpdateBootyBaseEvent (
-        address indexed staker
+        address staker,
+        address newBootyBase
     );
 
     event ReceiveApprovalEvent (
