@@ -31,8 +31,7 @@ contract SpankBank {
         uint256 bootyFees,
         uint256 totalSpankPoints,
         uint256 bootyMinted,
-        uint256 closingVotes,
-        uint256 totalStakedSpank
+        uint256 closingVotes
     );
 
     event SendFeesEvent (
@@ -86,8 +85,7 @@ contract SpankBank {
 
     event ReceiveApprovalEvent (
         address from,
-        address tokenContract,
-        bytes extraData
+        address tokenContract
     );
 
     /***********************************
@@ -137,7 +135,6 @@ contract SpankBank {
         uint256 startTime; // the starting unix timestamp in seconds
         uint256 endTime; // the ending unix timestamp in seconds
         uint256 closingVotes; // the total votes to close this period
-        uint256 totalStakedSpank; // the total SPANK staked
     }
 
     mapping(uint256 => Period) public periods;
@@ -238,9 +235,6 @@ contract SpankBank {
         periods[currentPeriod + 1].totalSpankPoints = totalPoints;
 
         staker.spankPoints[currentPeriod + 1] = stakerPoints;
-
-        Period storage period = periods[currentPeriod];
-        period.totalStakedSpank = SafeMath.add(period.totalStakedSpank, staker.spankStaked);
     }
 
     function receiveApproval(address from, uint256 amount, address tokenContract, bytes extraData) SpankBankIsOpen public returns (bool success) {
@@ -248,7 +242,7 @@ contract SpankBank {
         address bootyBaseFromBytes = extraData.toAddress(44);
         uint256 periodFromBytes = extraData.toUint(64);
 
-        emit ReceiveApprovalEvent(from, tokenContract, extraData);
+        emit ReceiveApprovalEvent(from, tokenContract);
 
         doStake(from, amount, periodFromBytes, delegateKeyFromBytes, bootyBaseFromBytes);
         return true;
@@ -316,8 +310,7 @@ contract SpankBank {
                 prevPeriod.bootyFees,
                 prevPeriod.totalSpankPoints,
                 prevPeriod.bootyMinted,
-                prevPeriod.closingVotes,
-                prevPeriod.totalStakedSpank
+                prevPeriod.closingVotes
             );
 
             currentPeriod += 1;
@@ -378,7 +371,6 @@ contract SpankBank {
         require(bootyToken.transfer(staker.bootyBase, bootyOwed));
 
         emit ClaimBootyEvent(stakerAddress, claimPeriod, bootyOwed);
-
     }
 
     function withdrawStake() public {
