@@ -26,14 +26,6 @@ contract SpankBank {
         uint256 stakePeriods
     );
 
-    event PeriodEvent(
-        uint256 indexed period,
-        uint256 bootyFees,
-        uint256 totalSpankPoints,
-        uint256 bootyMinted,
-        uint256 closingVotes
-    );
-
     event SendFeesEvent (
         address indexed sender,
         uint256 bootyAmount
@@ -305,14 +297,6 @@ contract SpankBank {
     function updatePeriod() public {
         while (now >= periods[currentPeriod].endTime) {
             Period memory prevPeriod = periods[currentPeriod];
-            emit PeriodEvent(
-                currentPeriod,
-                prevPeriod.bootyFees,
-                prevPeriod.totalSpankPoints,
-                prevPeriod.bootyMinted,
-                prevPeriod.closingVotes
-            );
-
             currentPeriod += 1;
             periods[currentPeriod].startTime = prevPeriod.endTime;
             periods[currentPeriod].endTime = SafeMath.add(prevPeriod.endTime, periodLength);
