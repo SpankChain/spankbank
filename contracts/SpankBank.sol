@@ -120,9 +120,9 @@ contract SpankBank {
         uint256 endingPeriod; // the period after which this stake expires
         mapping(uint256 => uint256) spankPoints; // the spankPoints per period
         mapping(uint256 => bool) didClaimBooty; // true if staker claimed BOOTY for that period
-        mapping(uint256 => bool) votedToClose; // true if voter voted
-        address delegateKey;
-        address bootyBase;
+        mapping(uint256 => bool) votedToClose; // true if staker voted to close for that period
+        address delegateKey; // address used to call checkIn and claimBooty
+        address bootyBase; // destination address to receive BOOTY
     }
 
     mapping(address => Staker) public stakers;
@@ -247,18 +247,6 @@ contract SpankBank {
         doStake(from, amount, periodFromBytes, delegateKeyFromBytes, bootyBaseFromBytes);
         return true;
     }
-
-    // user will be able to add more SPANK to their stake and / or extend it
-    // function updateStake(uint256 amount, uint256 periods) {}
-
-    // 1. Anyone calls the mint function, which generates all the new booty for that period
-    //  - what if no one calls mint? the booty supply will be lower for the next round
-    //  - more booty will be created later to compensate (not really a bid deal)
-    // 2. Stakers can withdraw their minted BOOTY
-
-    // Do the fees get calculated for the current period or the next one? Current
-    // Does the minting depends on current stake or next?
-    // If I start staking at 10.5, my stake will only matter for 11, and the BOOTY generated after 11 will be based on the fees paid during 11, and can only be collected after 11 is done
 
     function sendFees(uint256 bootyAmount) SpankBankIsOpen public {
         updatePeriod();

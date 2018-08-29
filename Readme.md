@@ -88,7 +88,6 @@ The `Period` struct stores all releveant data for each period, and is saved in t
         uint256 startTime; // the starting unix timestamp in seconds
         uint256 endTime; // the ending unix timestamp in seconds
         uint256 closingVotes; // the total votes to close this period
-        uint256 totalStakedSpank; // the total SPANK staked
     }
 
   mapping(uint256 => Period) public periods;
@@ -98,8 +97,8 @@ The data for each period is set in the following order:
 1. The `totalSpankPoints` are tallied during the previous period, as each staker calls the `stake` or `checkIn` functions.
 2. The `startTime` and `endTime` are set when the period starts, when the `updatePeriod` function is called.
 3. The `bootyFees` are tallied during the period, as the `sendFees` function is called.
-// TODO checkpoint...
-4. Once the period is over, `bootyMinted` and `mintingComplete` are set when the `mintBooty` function is called.
+4. The `closingVotes` are tallied during the period, as stakers call `voteToClose`.
+5. Once the period is over, `bootyMinted` and `mintingComplete` are set when the `mintBooty` function is called during the next period.
 
 ## Functions
 
@@ -113,39 +112,45 @@ The data for each period is set in the following order:
 6. Set the `endTime` of the first period to 30 days from `now`.
 7. Initialize the `pointsTable` with hard coded values.
 ```
-  function SpankBank (
-    address spankAddress,
-    uint256 _periodLength,
-    uint256 _maxPeriods,
-    uint256 initialBootySupply
-  )  public {
-    periodLength = _periodLength;
-    spankToken = HumanStandardToken(spankAddress);
-    bootyToken = new MintableToken();
-    bootyToken.mint(this, initialBootySupply);
-    maxPeriods = _maxPeriods;
+    constructor (
+        uint256 _periodLength,
+        uint256 _maxPeriods,
+        address spankAddress,
+        uint256 initialBootySupply,
+        string bootyTokenName,
+        uint8 bootyDecimalUnits,
+        string bootySymbol
+    )   public {
+        periodLength = _periodLength;
+        maxPeriods = _maxPeriods;
+        spankToken = HumanStandardToken(spankAddress);
+        bootyToken = new MintAndBurnToken(bootyTokenName, bootyDecimalUnits, bootySymbol);
+        bootyToken.mint(this, initialBootySupply);
 
-    uint256 startTime = now;
+        uint256 startTime = now;
 
-    periods[currentPeriod].startTime = startTime;
-    periods[currentPeriod].endTime = SafeMath.add(startTime, periodLength);
+        periods[currentPeriod].startTime = startTime;
+        periods[currentPeriod].endTime = SafeMath.add(startTime, periodLength);
 
-    bootyToken.transfer(msg.sender, initialBootySupply);
+        bootyToken.transfer(msg.sender, initialBootySupply);
 
-    // initialize points table
-    pointsTable[1] = 45;
-    pointsTable[2] = 50;
-    pointsTable[3] = 55;
-    pointsTable[4] = 60;
-    pointsTable[5] = 65;
-    pointsTable[6] = 70;
-    pointsTable[7] = 75;
-    pointsTable[8] = 80;
-    pointsTable[9] = 85;
-    pointsTable[10] = 90;
-    pointsTable[11] = 95;
-    pointsTable[12] = 100;
-  }
+        // initialize points table
+        pointsTable[0] = 0;
+        pointsTable[1] = 45;
+        pointsTable[2] = 50;
+        pointsTable[3] = 55;
+        pointsTable[4] = 60;
+        pointsTable[5] = 65;
+        pointsTable[6] = 70;
+        pointsTable[7] = 75;
+        pointsTable[8] = 80;
+        pointsTable[9] = 85;
+        pointsTable[10] = 90;
+        pointsTable[11] = 95;
+        pointsTable[12] = 100;
+
+        emit SpankBankCreated(_periodLength, _maxPeriods, spankAddress, initialBootySupply, bootyTokenName, bootyDecimalUnits, bootySymbol);
+    }
 ```
 
 #### Bootstrapping BOOTY
@@ -162,14 +167,22 @@ In order to make sure all interactions with the SpankBank take place during the 
 So long as the current time (`now`) is greater than the `endTime` of the current period (meaning the period is over), the `currentPeriod` is incremented by one and then the `startTime` and the `endTime` for the next `Period` are set as well.
 
 ```
-  function updatePeriod() public {
-    while (now >= periods[currentPeriod].endTime) {
-      Period memory prevPeriod = periods[currentPeriod];
-      currentPeriod += 1;
-      periods[currentPeriod].startTime = prevPeriod.endTime;
-      periods[currentPeriod].endTime = SafeMath.add(prevPeriod.endTime, periodLength);
+    function updatePeriod() public {
+        while (now >= periods[currentPeriod].endTime) {
+            Period memory prevPeriod = periods[currentPeriod];
+            emit PeriodEvent(
+                currentPeriod,
+                prevPeriod.bootyFees,
+                prevPeriod.totalSpankPoints,
+                prevPeriod.bootyMinted,
+                prevPeriod.closingVotes
+            );
+
+            currentPeriod += 1;
+            periods[currentPeriod].startTime = prevPeriod.endTime;
+            periods[currentPeriod].endTime = SafeMath.add(prevPeriod.endTime, periodLength);
+        }
     }
-  }
 ```
 The reason this is done using a `while` loop is just in case an entire period passes without any SpankBank interactions taking place. This is extremely unlikely and would mean no fees were paid not a single staker checked in, but we wanted to protect against that scenario anyways.
 
@@ -180,37 +193,95 @@ One scenario the `updatePeriod` function does not protect against is if enough p
 Used to open a new staking position with `spankAmount` SPANK tokens for a length of `stakePeriods` periods.
 
 1. Updates the period.
+2. Saves the staker data.
 3. Transfers SPANK from the staker to the SpankBank.
 4. Calculates and saves the `staker.spankPoints` for the next period.
-5. Adds the `staker.spankpoints` to the `totalSpankPoints` for the next period and saves it.
+5. Adds the `staker.spankpoints` to the `totalSpankPoints` for the next period.
+6. Updates the `totalSpankStaked`.
+7. Updates the `stakerByDelegateKey` lookup table.
+
+Note: In order to improve the UX of staking, we allow the user to combine calling the `approve` function on the SPANK contract and the `stake` function on this contract by calling the `approveAndCall` function on the SPANK contract with the staking parameters. The `approveAndCall` forwards a payload with the staking parameters to the `receiveApproval` function on the SpankBank, which then stakes as usual. To allow for either way of staking, we execute the main staking logic inside the `doStake` function and call it from both `stake` and `receiveApproval`.
 
 ```
-  function stake(uint256 spankAmount, uint256 stakePeriods) public {
-    updatePeriod();
+    function stake(
+        uint256 spankAmount,
+        uint256 stakePeriods,
+        address delegateKey,
+        address bootyBase
+    ) SpankBankIsOpen public {
+        doStake(msg.sender, spankAmount, stakePeriods, delegateKey, bootyBase);
+    }
 
-    require(stakePeriods > 0 && stakePeriods <= maxPeriods); // stake 1-12 (max) periods
-    require(spankAmount > 0); // stake must be greater than 0
+    function doStake(
+        address stakerAddress,
+        uint256 spankAmount,
+        uint256 stakePeriods,
+        address delegateKey,
+        address bootyBase
+    ) internal {
+        updatePeriod();
+        require(stakePeriods > 0 && stakePeriods <= maxPeriods, "stake not between zero and maxPeriods"); // stake 1-12 (max) periods
+        require(spankAmount > 0, "stake is 0"); // stake must be greater than 0
 
-    // the msg.sender must not have an active staking position
-    // TODO checking that endingPeriod == 0 should cover all periods
-    require(stakers[msg.sender].startingPeriod == 0 && stakers[msg.sender].endingPeriod == 0);
+        // the staker must not have an active staking position
+        require(stakers[stakerAddress].startingPeriod == 0, "staker already exists");
 
-    // transfer SPANK to this contract - assumes sender has already "allowed" the spankAmount
-    require(spankToken.transferFrom(msg.sender, this, spankAmount));
+        // transfer SPANK to this contract - assumes sender has already "allowed" the spankAmount
+        require(spankToken.transferFrom(stakerAddress, this, spankAmount));
 
-    // The spankAmount of spankPoints the user will have during the next staking period
-    // TODO the division is unnecessary - we're only dividing by the total
-    uint256 nextSpankPoints = SafeMath.div( SafeMath.mul(spankAmount, pointsTable[stakePeriods]), 100 );
+        stakers[stakerAddress] = Staker(spankAmount, currentPeriod + 1, currentPeriod + stakePeriods, delegateKey, bootyBase);
 
-    stakers[msg.sender] = Staker(spankAmount, currentPeriod + 1, currentPeriod + stakePeriods);
+        _updateNextPeriodPoints(stakerAddress, stakePeriods);
 
-    stakers[msg.sender].spankPoints[currentPeriod + 1] = nextSpankPoints;
+        totalSpankStaked = SafeMath.add(totalSpankStaked, spankAmount);
 
-    uint256 nextTotalSpankPoints = periods[currentPeriod + 1].totalSpankPoints;
-    nextTotalSpankPoints = SafeMath.add(nextTotalSpankPoints, nextSpankPoints);
-    periods[currentPeriod + 1].totalSpankPoints = nextTotalSpankPoints;
-  }
+        require(delegateKey != address(0), "delegateKey does not exist");
+        require(bootyBase != address(0), "bootyBase does not exist");
+        require(stakerByDelegateKey[delegateKey] == address(0), "delegateKey already used");
+        stakerByDelegateKey[delegateKey] = stakerAddress;
+
+        emit StakeEvent(
+            stakerAddress,
+            currentPeriod + 1,
+            stakers[stakerAddress].spankPoints[currentPeriod + 1],
+            spankAmount,
+            stakePeriods
+        );
+    }
 ```
+
+#### receiveApproval
+
+As mentioned above, the `receiveApproval` function receives staking parameters as a payload from the `approveAndCall` function on the SPANK token contract when the staker wants to stake in a single transction. This is the default pattern supported by the SpankBank Explorer UI.
+
+```
+    function receiveApproval(address from, uint256 amount, address tokenContract, bytes extraData) SpankBankIsOpen public returns (bool success) {
+        address delegateKeyFromBytes = extraData.toAddress(12);
+        address bootyBaseFromBytes = extraData.toAddress(44);
+        uint256 periodFromBytes = extraData.toUint(64);
+
+        emit ReceiveApprovalEvent(from, tokenContract);
+
+        doStake(from, amount, periodFromBytes, delegateKeyFromBytes, bootyBaseFromBytes);
+        return true;
+    }
+```
+
+#### Convenience vs. Security: delegateKey and bootyBase
+
+We expect that stakers will have varying preferences for security vs. convenience, and so we designed the SpankBank to allow stakers to optionally split up responsibilities across multiple accounts. The `delegateKey` is used to `checkIn` and `claimBooty` every month, and the `bootyBase` is where the claimed BOOTY will be deposited. The account originally used to stake (the `staker.address`) must be used to `splitStake`, `withdrawStake`, `voteToClose`, `updateDelegateKey`, and `updateBootyBase`.
+
+Should stakers maximally prefer convenience, they can use the same address for all three and never think about this again. Should stakers maximally prefer security, they could use a multi-sig wallet or hardware wallet to stake, keep that account in cold storage and secure, and only use it as needed (e.g. 1 year later to withdraw). They could then use a second account as the `delegateKey`, which they would keep hot and only use once a month to `checkIn` and `claimBooty`, and use a third account as their `bootyBase`. Splitting up these accounts makes it so that hackers would need to take over both the `delegateKey` and the `bootyBase` in order to steal a staker's BOOTY for the period, at which point the staker could call `updateDelegateKey` and `updateBootyBase` to regain control.
+
+The most important security risk around having a `delegateKey` hacked is that it can be used to `checkIn` and potentially increase the staking period to the maximum, which can not be undone.
+
+#### Other Considerations
+
+Staking only goes into effect for the *next* period. If a staker stakes during period 1, that will give them spankpoints for period 2, and in period 3 they will be able to claim ther share of the BOOTY minted as a result of fees sent during period 2.
+
+If a staker only stakes for 1 period, they will not be able to `checkIn` and extend their stake. It will expire after the next period and they will be forced to withdraw and re-stake if they wish to stake again using the same SPANK. Because staking only goes into effect in the *next* period, they would be effectively missing every other period.
+
+The SpankBank does not delete stakers after they withdraw, and so stakers who stake, withdraw, and attempt to stake again from the same account will find themselves getting contract errors. Each new stake is required to come from a fresh account.
 
 ### sendFees
 
@@ -222,18 +293,20 @@ Used to send `bootyAmount` BOOTY tokens in fees to the SpankBank, which are then
 4. Adds the `bootyAmount` to the `period.bootyFees` for the current period.
 
 ```
-  function sendFees(uint256 bootyAmount) public {
-    updatePeriod();
+    function sendFees(uint256 bootyAmount) SpankBankIsOpen public {
+        updatePeriod();
 
-    require(bootyAmount > 0); // fees must be greater than 0
-    require(bootyToken.transferFrom(msg.sender, this, bootyAmount));
+        require(bootyAmount > 0, "fee is zero"); // fees must be greater than 0
+        require(bootyToken.transferFrom(msg.sender, this, bootyAmount));
 
-    bootyToken.burn(bootyAmount);
+        bootyToken.burn(bootyAmount);
 
-    uint256 currentBootyFees = periods[currentPeriod].bootyFees;
-    currentBootyFees = SafeMath.add(bootyAmount, currentBootyFees);
-    periods[currentPeriod].bootyFees = currentBootyFees;
-  }
+        uint256 currentBootyFees = periods[currentPeriod].bootyFees;
+        currentBootyFees = SafeMath.add(bootyAmount, currentBootyFees);
+        periods[currentPeriod].bootyFees = currentBootyFees;
+
+        emit SendFeesEvent(msg.sender, bootyAmount);
+    }
 ```
 
 ### mintBooty
@@ -246,24 +319,29 @@ Used to mint new BOOTY based on the total fees from the previous period.
 4. Saves the amount of BOOTY minted to `period.bootyMinted`.
 
 ```
-  function mintBooty() public {
-    updatePeriod();
+    function mintBooty() SpankBankIsOpen public {
+        updatePeriod();
 
-    Period storage period = periods[currentPeriod - 1];
-    require(!period.mintingComplete); // cant mint BOOTY twice
+        // can't mint BOOTY during period 0 - would result in integer underflow
+        require(currentPeriod > 0, "current period is zero");
 
-    period.mintingComplete = true;
+        Period storage period = periods[currentPeriod - 1];
+        require(!period.mintingComplete, "minting already complete"); // cant mint BOOTY twice
 
-    uint256 targetBootySupply = SafeMath.mul(period.bootyFees, 20);
-    uint256 totalBootySupply = bootyToken.totalSupply();
+        period.mintingComplete = true;
 
-    if (targetBootySupply > totalBootySupply) {
-      uint256 bootyMinted = targetBootySupply - totalBootySupply;
-      bootyToken.mint(this, bootyMinted);
-      period.bootyMinted = bootyMinted;
+        uint256 targetBootySupply = SafeMath.mul(period.bootyFees, 20);
+        uint256 totalBootySupply = bootyToken.totalSupply();
+
+        if (targetBootySupply > totalBootySupply) {
+            uint256 bootyMinted = targetBootySupply - totalBootySupply;
+            bootyToken.mint(this, bootyMinted);
+            period.bootyMinted = bootyMinted;
+            emit MintBootyEvent(targetBootySupply, totalBootySupply);
+        }
     }
-  }
 ```
+Newly minted BOOTY is owned by the SpankBank contract until it is claimed.
 
 If `mintBooty` is skipped for a period, the impact would be that the stakers for that period would not receive their BOOTY, which would especially hurt stakers that are exiting after that period. Overall, the impact would be minimal, as any reduction in the total BOOTY supply would be made up when `mintBooty` was called during the next period.
 
@@ -275,28 +353,32 @@ Used by stakers to withdraw their share of the BOOTY minted for a previous perio
 2. Sets the `staker.didClaimBooty = true` to prevent double BOOTY claims for a period.
 3. Calculates the staker's share of the BOOTY minted for the period and transfers it from the SpankBank to the staker.
 ```
-  function claimBooty(uint256 _period) public {
-    updatePeriod();
+    function claimBooty(uint256 claimPeriod) public {
+        updatePeriod();
 
-    require(_period < currentPeriod); // can only claim booty for previous periods
+        Period memory period = periods[claimPeriod];
+        require(period.mintingComplete, "booty not minted");
 
-    Staker storage staker = stakers[msg.sender];
+        address stakerAddress = stakerByDelegateKey[msg.sender];
 
-    require(!staker.didClaimBooty[_period]); // can only claim booty once
+        Staker storage staker = stakers[stakerAddress];
 
-    staker.didClaimBooty[_period] = true;
+        require(!staker.didClaimBooty[claimPeriod], "staker already claimed"); // can only claim booty once
 
-    Period memory period = periods[_period];
-    uint256 bootyMinted = period.bootyMinted;
-    uint256 totalSpankPoints = period.totalSpankPoints;
+        uint256 stakerSpankPoints = staker.spankPoints[claimPeriod];
+        require(stakerSpankPoints > 0, "staker has no points"); // only stakers can claim
 
-    if (totalSpankPoints > 0) {
-      uint256 stakerSpankPoints = staker.spankPoints[_period];
-      uint256 bootyOwed = SafeMath.div(SafeMath.mul(stakerSpankPoints, bootyMinted), totalSpankPoints);
+        staker.didClaimBooty[claimPeriod] = true;
 
-      require(bootyToken.transfer(msg.sender, bootyOwed));
+        uint256 bootyMinted = period.bootyMinted;
+        uint256 totalSpankPoints = period.totalSpankPoints;
+
+        uint256 bootyOwed = SafeMath.div(SafeMath.mul(stakerSpankPoints, bootyMinted), totalSpankPoints);
+
+        require(bootyToken.transfer(staker.bootyBase, bootyOwed));
+
+        emit ClaimBootyEvent(stakerAddress, claimPeriod, bootyOwed);
     }
-  }
 ```
 
 Because `claimBooty` accepts a period to retrieve BOOTY for, it allows for stakers to be lazy and store their BOOTY with the SpankBank indefinitely until they are ready to withdraw.
@@ -306,43 +388,37 @@ Because `claimBooty` accepts a period to retrieve BOOTY for, it allows for stake
 Used by stakers to establish their eligibility for receiving BOOTY for the next period. Can also optionally extend the staker's `endingPeriod`.
 
 1. Updates the period.
-3. If an `updatedEndingPeriod` is provided, updates `staker.endingPeriod`.
-4. Calculates and saves the `staker.spankPoints` for the next period.
-5. Adds the `staker.spankpoints` to the `totalSpankPoints` for the next period and saves it.
+2. If an `updatedEndingPeriod` is provided, updates `staker.endingPeriod`.
+3. Calculates and saves the `staker.spankPoints` for the next period.
+4. Adds the `staker.spankpoints` to the `totalSpankPoints` for the next period and saves it.
 
 ```
-  function checkIn(uint256 updatedEndingPeriod) public {
-    updatePeriod();
+    function checkIn(uint256 updatedEndingPeriod) SpankBankIsOpen public {
+        updatePeriod();
 
-    Staker storage staker = stakers[msg.sender];
+        address stakerAddress =  stakerByDelegateKey[msg.sender];
 
-    require(currentPeriod < staker.endingPeriod);
+        Staker storage staker = stakers[stakerAddress];
 
-    if (updatedEndingPeriod > 0) {
-      // TODO I'm not sure we can rely on the staker.endingPeriod to be greater than the
-      // currentPeriod - what if the staker expires but never withdraws their stake?
-      require(updatedEndingPeriod > currentPeriod);
-      require(updatedEndingPeriod > staker.endingPeriod);
-      require(updatedEndingPeriod <= currentPeriod + maxPeriods);
+        require(staker.spankStaked > 0, "staker stake is zero");
+        require(currentPeriod < staker.endingPeriod, "staker expired");
+        require(staker.spankPoints[currentPeriod+1] == 0, "staker has points for next period");
 
-      staker.endingPeriod = updatedEndingPeriod;
+        // If updatedEndingPeriod is 0, don't update the ending period
+        if (updatedEndingPeriod > 0) {
+            require(updatedEndingPeriod > staker.endingPeriod, "updatedEndingPeriod less than or equal to staker endingPeriod");
+            require(updatedEndingPeriod <= currentPeriod + maxPeriods, "updatedEndingPeriod greater than currentPeriod and maxPeriods");
+            staker.endingPeriod = updatedEndingPeriod;
+        }
+
+        uint256 stakePeriods = staker.endingPeriod - currentPeriod;
+
+        _updateNextPeriodPoints(stakerAddress, stakePeriods);
+
+        emit CheckInEvent(stakerAddress, currentPeriod + 1, staker.spankPoints[currentPeriod + 1], staker.endingPeriod);
     }
-
-    uint256 stakePeriods = staker.endingPeriod - currentPeriod;
-
-    // TODO combine this and the code from stake into their own function to reduce dup
-
-    // The spankAmount of spankPoints the user will have during the next staking period
-    uint256 nextSpankPoints = SafeMath.div(SafeMath.mul(staker.spankStaked, pointsTable[stakePeriods]), 100);
-
-    staker.spankPoints[currentPeriod + 1] = nextSpankPoints;
-
-    uint256 nextTotalSpankPoints = periods[currentPeriod + 1].totalSpankPoints;
-    nextTotalSpankPoints = SafeMath.add(nextTotalSpankPoints, nextSpankPoints);
-    periods[currentPeriod + 1].totalSpankPoints = nextTotalSpankPoints;
-  }
-
 ```
+If `0` is provided for `updatedEndingPeriod`, the `staker.endingPeriod` stays the same.
 
 If a staker fails to check in for a period, they will not be able to receive any BOOTY minted for that period. Failing to check in for one period does not, however, prevent the staker from checking in for subsequent periods.
 
@@ -352,26 +428,31 @@ Another reason for requiring check ins is to address the possibility of stakers 
 
 ### withdrawStake
 
-Used by stakers to withdraw their staked SPANK after their stake's `endingPeriod` has passed.
+Used by stakers to withdraw their staked SPANK after their stake's `endingPeriod` has passed or after the SpankBank has been closed via `voteToClose`.
 
 1. Updates the period.
-2. Transfers the staked SPANK to the staker.
-3. Sets the `staker.spankStaked = 0` to prevent withdrawing excess SPANK.
+2. Sets the `staker.spankStaked = 0` to prevent withdrawing excess SPANK.
+3. Transfers the staked SPANK to the staker.
 
 ```
-  function withdrawStake() public {
-    updatePeriod();
+    function withdrawStake() public {
+        updatePeriod();
 
-    Staker storage staker = stakers[msg.sender];
+        Staker storage staker = stakers[msg.sender];
+        require(staker.spankStaked > 0, "staker has no stake");
 
-    require(currentPeriod > staker.endingPeriod);
+        require(isClosed || currentPeriod > staker.endingPeriod, "currentPeriod less than endingPeriod or spankbank closed");
 
-    spankToken.transfer(msg.sender, staker.spankStaked);
+        uint256 spankToWithdraw = staker.spankStaked;
 
-    staker.spankStaked = 0;
-  }
+        totalSpankStaked = SafeMath.sub(totalSpankStaked, staker.spankStaked);
+        staker.spankStaked = 0;
+
+        spankToken.transfer(msg.sender, spankToWithdraw);
+
+        emit WithdrawStakeEvent(msg.sender, spankToWithdraw);
+    }
 ```
-It is possible for a staker to call `withdrawStake` multiple times, but because after the first time the `staker.spankStaked` would be zero, future calls would simply transfer zero SPANK to the staker.
 
 ### splitStake
 
@@ -381,47 +462,124 @@ a period.
 
 1. Updates the period.
 2. Subtracts the `spankAmount` to split from `staker.spankStaked`.
-3. Create and save a new `Staker` with the transferred `spankAmount`, and the
+3. Create and save a new `Staker` with the transferred `spankAmount` and the
    same `startingPeriod` and `endingPeriod` as the original staker.
 
 ```
-  function splitStake(address newAddress, uint256 spankAmount) public {
-    updatePeriod();
+    function splitStake(
+        address newAddress,
+        address newDelegateKey,
+        address newBootyBase,
+        uint256 spankAmount
+    ) public {
+        updatePeriod();
 
-    require(newAddress != address(0));
-    require(spankAmount > 0);
+        require(newAddress != address(0), "newAddress is zero");
+        require(newDelegateKey != address(0), "delegateKey is zero");
+        require(newBootyBase != address(0), "bootyBase is zero");
+        require(stakerByDelegateKey[newDelegateKey] == address(0), "delegateKey in use");
 
-    Staker memory newStaker = stakers[newAddress];
-    // the newAddress can't belong to someone who is already staking
-    require(newStaker.spankStaked == 0);
-    require(newStaker.startingPeriod == 0);
-    require(newStaker.endingPeriod == 0);
+        require(spankAmount > 0, "spankAmount is zero");
 
-    Staker storage staker = stakers[msg.sender];
-    require(currentPeriod < staker.endingPeriod); // can't split after your
-    stake expires
-    require(spankAmount <= staker.spankStaked); // can't split more than your
-    stake
-    require(staker.spankPoints[currentPeriod + 1] == 0); // must splitStake
-    before checking in
-    staker.spankStaked = SafeMath.sub(staker.spankStaked, spankAmount);
+        Staker storage staker = stakers[msg.sender];
+        require(currentPeriod < staker.endingPeriod, "staker expired");
+        require(spankAmount <= staker.spankStaked, "spankAmount greater than stake");
+        require(staker.spankPoints[currentPeriod+1] == 0, "staker has points for next period");
 
-    stakers[newAddress] = Staker(spankAmount, staker.startingPeriod, staker.endingPeriod);
-  }
+        staker.spankStaked = SafeMath.sub(staker.spankStaked, spankAmount);
+
+        stakers[newAddress] = Staker(spankAmount, staker.startingPeriod, staker.endingPeriod, newDelegateKey, newBootyBase);
+
+        stakerByDelegateKey[newDelegateKey] = newAddress;
+
+        emit SplitStakeEvent(msg.sender, newAddress, newDelegateKey, newBootyBase, spankAmount);
+    }
 ```
 
-The motivation for `splitStake` is primarily to allow stakers to be able to
-decide to extend less than their total stake when they check in. Without
-`splitStake`, stakers would be forced during every check in to have to decide to
-either extend their entire stake or not. If a staker wanted to, for example,
-extend 90% of their stake but let 10% gradually expire, they wouldn't be able
-to. They would have to decide to either extend 100% of their stake or let 100%
-of their stake gradually expire.
+The motivation for `splitStake` is primarily to allow stakers to be able to decide to extend less than their total stake when they check in. Without `splitStake`, stakers would be forced during every check in to have to decide to either extend their entire stake or not. If a staker wanted to, for example, extend 90% of their stake but let 10% gradually expire, they wouldn't be able to. They would have to decide to either extend 100% of their stake or let 100% of their stake gradually expire.
 
-To get around this limitation, stakers would likely split their stakes up to be
-controlled by multiple addresses, so they could decide whether or not to extend
-each staking position independently. This would make staking more annoying and require
-unnecessary upfront planning. The `splitStake` function gives stakers more
-flexibility in deciding how much of their stake to extend over time, and
-reduces friction from the initial staking.
+To get around this limitation, stakers would likely split their stakes up to be controlled by multiple addresses, so they could decide whether or not to extend each staking position independently. This would make staking more annoying and require unnecessary upfront planning. The `splitStake` function gives stakers more flexibility in deciding how much of their stake to extend over time, and reduces friction from the initial staking.
 
+### voteToClose
+
+Used by stakers to close the SpankBank and be able to withdraw early (e.g. in case of catastrophic bug or planned upgrade). If stakers accounting for more than 50% of the staked SPANK call `voteToClose` in the same period, the SpankBank will immediately transition to a "closed" state and allow stakers to withdraw early.
+
+1. Updates the period.
+2. Adds `staker.spankStaked` to `period.closingVotes`.
+3. If `period.closingVotes` is over 50% of the `totalSpankStaked`, sets `isClosed` to true.
+```
+    function voteToClose() public {
+        updatePeriod();
+
+        Staker storage staker = stakers[msg.sender];
+
+        require(staker.spankStaked > 0, "stake is zero");
+        require(currentPeriod < staker.endingPeriod , "staker expired");
+        require(staker.votedToClose[currentPeriod] == false, "stake already voted");
+        require(isClosed == false, "SpankBank already closed");
+
+        uint256 closingVotes = periods[currentPeriod].closingVotes;
+        closingVotes = SafeMath.add(closingVotes, staker.spankStaked);
+        periods[currentPeriod].closingVotes = closingVotes;
+
+        staker.votedToClose[currentPeriod] = true;
+
+        uint256 closingTrigger = SafeMath.div(totalSpankStaked, 2);
+        if (closingVotes > closingTrigger) {
+            isClosed = true;
+        }
+
+        emit VoteToCloseEvent(msg.sender, currentPeriod);
+    }
+```
+
+#### Upgrading the SpankBank
+
+We have decided to forego attempting to make the SpankBank directly upgradeable
+onchain because of the additional complexity and foresight required today to make the
+present SpankBank forward compatible with the next version. Instead, when it is
+time to upgrade SpankChain will deploy a new SpankBank smart contract and the
+stakers will be able to `voteToClose` the old SpankBank, withdraw their SPANK,
+and optionally re-stake in the new SpankBank.
+
+### updateDelegateKey
+
+Used by a staker to update the `delegateKey` account which they use to `checkIn` and
+`claimBooty`.
+
+1. Updates the period.
+2. Resets the value of `stakerByDelegateKey` for the previous `delegateKey` to
+   the default zero address.
+3. Sets `staker.delegateKey` to the new `delegateKey`.
+4. Sets the value of `stakerByDelegateKey` for the new `delegateKey` to the
+   `staker.address`.
+```
+    function updateDelegateKey(address newDelegateKey) public {
+        require(newDelegateKey != address(0), "delegateKey is zero");
+        require(stakerByDelegateKey[newDelegateKey] == address(0), "delegateKey already exists");
+
+        Staker storage staker = stakers[msg.sender];
+        require(staker.startingPeriod > 0, "staker starting period is zero");
+
+        stakerByDelegateKey[staker.delegateKey] = address(0);
+        staker.delegateKey = newDelegateKey;
+        stakerByDelegateKey[newDelegateKey] = msg.sender;
+
+        emit UpdateDelegateKeyEvent(msg.sender);
+    }
+```
+### updateBootyBase
+
+Used by a staker to update the `bootyBase` account at which they receive the
+BOOTY they claim.
+
+```
+    function updateBootyBase(address newBootyBase) public {
+        Staker storage staker = stakers[msg.sender];
+        require(staker.startingPeriod > 0, "staker starting period is zero");
+
+        staker.bootyBase = newBootyBase;
+
+        emit UpdateBootyBaseEvent(msg.sender);
+    }
+```

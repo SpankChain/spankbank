@@ -105,7 +105,7 @@ async function constructorEvents(Contract) {
                   const topics = (log.topics.length > 1) ? log.topics.slice(1) : []
                   return abi.decodeLog(inputs, log.data, topics)
               }
-          })                
+          })
       }
   }
 
@@ -987,7 +987,7 @@ contract('SpankBank', (accounts) => {
 
       const tx = await spankbank.claimBooty(previousPeriod, { from: staker1.address })
       await verifyClaimBootyEvent(tx, staker1)
-      
+
       // staker1 sends fees (all the booty the just received)
       // assumes bootyBase is the same as address
       await bootyToken.approve(spankbank.address, fees, {from: staker1.address})
