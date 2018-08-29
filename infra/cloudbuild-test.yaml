@@ -1,0 +1,21 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '-t', 'spankbank:test',
+      '-f', 'infra/Dockerfile',
+      '.'
+    ]
+  - name: 'docker/compose:1.18.0'
+    args: ['up', '-d']
+    dir: 'infra'
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'run',
+      '--name',
+      'spankbank',
+      '--network',
+      'container:ganache',
+      'spankbank:test'
+    ]
+
