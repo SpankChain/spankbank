@@ -18,7 +18,6 @@ env/
 .env/
 *egg-info*
 misc/
-dist/
 Icon\?
 node_modules/
 npm-debug.log

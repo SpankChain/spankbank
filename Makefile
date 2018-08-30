@@ -1,4 +1,4 @@
-compile:
+compile: clean
 	truffle compile
 
 generate:
@@ -11,4 +11,4 @@ clean:
 
 build: compile generate
 
-.PHONY: compile generate build
+.PHONY: compile generate build clean
