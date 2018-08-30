@@ -23,7 +23,9 @@ contract SpankBank {
         uint256 period,
         uint256 spankPoints,
         uint256 spankAmount,
-        uint256 stakePeriods
+        uint256 stakePeriods,
+        address delegateKey,
+        address bootyBase
     );
 
     event SendFeesEvent (
@@ -212,7 +214,9 @@ contract SpankBank {
             currentPeriod + 1,
             stakers[stakerAddress].spankPoints[currentPeriod + 1],
             spankAmount,
-            stakePeriods
+            stakePeriods,
+            delegateKey,
+            bootyBase
         );
     }
 
@@ -424,7 +428,7 @@ contract SpankBank {
         staker.delegateKey = newDelegateKey;
         stakerByDelegateKey[newDelegateKey] = msg.sender;
 
-        emit UpdateDelegateKeyEvent(msg.sender);
+        emit UpdateDelegateKeyEvent(msg.sender, newDelegateKey);
     }
 
     function updateBootyBase(address newBootyBase) public {
@@ -433,7 +437,7 @@ contract SpankBank {
 
         staker.bootyBase = newBootyBase;
 
-        emit UpdateBootyBaseEvent(msg.sender);
+        emit UpdateBootyBaseEvent(msg.sender, newBootyBase);
     }
 
     function getSpankPoints(address stakerAddress, uint256 period) public view returns (uint256)  {

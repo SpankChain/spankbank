@@ -219,6 +219,8 @@ contract('SpankBank', (accounts) => {
         assert.equal(+event.spankPoints, +spankPoints)
         assert.equal(+event.spankAmount, staker.stake)
         assert.equal(+event.stakePeriods, staker.periods)
+        assert.equal(event.delegateKey, staker.delegateKey)
+        assert.equal(event.bootyBase, staker.bootyBase)
       }
     }
 
@@ -1358,6 +1360,7 @@ contract('SpankBank', (accounts) => {
       //update delegate key event
       const updateDelegateKeyEventPayload = getEventParams(tx, "UpdateDelegateKeyEvent")
       assert.equal(updateDelegateKeyEventPayload.staker, stakerAddress)
+      assert.equal(updateDelegateKeyEventPayload.newDelegateKey, newDelegateKey)
     }
 
     beforeEach(async () => {
@@ -1435,6 +1438,7 @@ contract('SpankBank', (accounts) => {
       assert.equal(updatedBootyBase, newBootyBase)
       const updateBootyBaseEventPayload = getEventParams(tx, "UpdateBootyBaseEvent")
       assert.equal(updateBootyBaseEventPayload.staker, staker.address)
+      assert.equal(updateBootyBaseEventPayload.newBootyBase, newBootyBase)
     }
 
     beforeEach(async () => {
