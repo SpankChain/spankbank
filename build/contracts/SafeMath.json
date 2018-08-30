@@ -1,14 +1,14 @@
 {
   "contractName": "SafeMath",
   "abi": [],
-  "bytecode": "0x604c602c600b82828239805160001a60731460008114601c57601e565bfe5b5030600052607381538281f30073000000000000000000000000000000000000000030146080604052600080fd00a165627a7a72305820688d1fa817800c4929d72f75c23b8b0ecf1849c4703804ac5483f7bfa4c224a10029",
-  "deployedBytecode": "0x73000000000000000000000000000000000000000030146080604052600080fd00a165627a7a72305820688d1fa817800c4929d72f75c23b8b0ecf1849c4703804ac5483f7bfa4c224a10029",
+  "bytecode": "0x604c602c600b82828239805160001a60731460008114601c57601e565bfe5b5030600052607381538281f30073000000000000000000000000000000000000000030146080604052600080fd00a165627a7a72305820682b319b387f3b3f6521fb8881624ba6c17e0ab2e10736ae798e21e5f04b260a0029",
+  "deployedBytecode": "0x73000000000000000000000000000000000000000030146080604052600080fd00a165627a7a72305820682b319b387f3b3f6521fb8881624ba6c17e0ab2e10736ae798e21e5f04b260a0029",
   "sourceMap": "116:682:6:-;;132:2:-1;166:7;155:9;146:7;137:37;252:7;246:14;243:1;238:23;232:4;229:33;270:1;265:20;;;;222:63;;265:20;274:9;222:63;;298:9;295:1;288:20;328:4;319:7;311:22;352:7;343;336:24",
   "deployedSourceMap": "116:682:6:-;;;;;;;;",
   "source": "pragma solidity 0.4.24;\n\n\n/**\n * @title SafeMath\n * @dev Math operations with safety checks that throw on error\n */\nlibrary SafeMath {\n  function mul(uint256 a, uint256 b) internal pure returns (uint256) {\n    uint256 c = a * b;\n    assert(a == 0 || c / a == b);\n    return c;\n  }\n\n  function div(uint256 a, uint256 b) internal pure returns (uint256) {\n    // assert(b > 0); // Solidity automatically throws when dividing by 0\n    uint256 c = a / b;\n    // assert(a == b * c + a % b); // There is no case in which this doesn't hold\n    return c;\n  }\n\n  function sub(uint256 a, uint256 b) internal pure returns (uint256) {\n    assert(b <= a);\n    return a - b;\n  }\n\n  function add(uint256 a, uint256 b) internal pure returns (uint256) {\n    uint256 c = a + b;\n    assert(c >= a);\n    return c;\n  }\n}\n",
-  "sourcePath": "/Users/lex/Repos/spankchain/spankbank/contracts/SafeMath.sol",
+  "sourcePath": "/Users/wolever/SpankChain/repos/spankbank/contracts/SafeMath.sol",
   "ast": {
-    "absolutePath": "/Users/lex/Repos/spankchain/spankbank/contracts/SafeMath.sol",
+    "absolutePath": "/Users/wolever/SpankChain/repos/spankbank/contracts/SafeMath.sol",
     "exportedSymbols": {
       "SafeMath": [
         1650
@@ -289,7 +289,7 @@
                       "name": "assert",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 3382,
+                      "referencedDeclaration": 3394,
                       "src": "233:6:6",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_assert_pure$_t_bool_$returns$__$",
@@ -724,7 +724,7 @@
                       "name": "assert",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 3382,
+                      "referencedDeclaration": 3394,
                       "src": "626:6:6",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_assert_pure$_t_bool_$returns$__$",
@@ -1057,7 +1057,7 @@
                       "name": "assert",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 3382,
+                      "referencedDeclaration": 3394,
                       "src": "763:6:6",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_assert_pure$_t_bool_$returns$__$",
@@ -1218,7 +1218,7 @@
     "src": "0:799:6"
   },
   "legacyAST": {
-    "absolutePath": "/Users/lex/Repos/spankchain/spankbank/contracts/SafeMath.sol",
+    "absolutePath": "/Users/wolever/SpankChain/repos/spankbank/contracts/SafeMath.sol",
     "exportedSymbols": {
       "SafeMath": [
         1650
@@ -1499,7 +1499,7 @@
                       "name": "assert",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 3382,
+                      "referencedDeclaration": 3394,
                       "src": "233:6:6",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_assert_pure$_t_bool_$returns$__$",
@@ -1934,7 +1934,7 @@
                       "name": "assert",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 3382,
+                      "referencedDeclaration": 3394,
                       "src": "626:6:6",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_assert_pure$_t_bool_$returns$__$",
@@ -2267,7 +2267,7 @@
                       "name": "assert",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 3382,
+                      "referencedDeclaration": 3394,
                       "src": "763:6:6",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_assert_pure$_t_bool_$returns$__$",
@@ -2433,5 +2433,5 @@
   },
   "networks": {},
   "schemaVersion": "2.0.1",
-  "updatedAt": "2018-08-29T21:46:11.317Z"
+  "updatedAt": "2018-08-30T16:30:23.206Z"
 }
