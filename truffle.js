@@ -9,16 +9,23 @@ module.exports = {
       port: 8545,
       network_id: "*" // match any network
     },
+    mainnet: {
+      provider: function() {
+        return new HDWalletProvider(mnemonic, "https://mainnet.infura.io/M2xeaVefzxkLhvrTLq43")
+      },
+      network_id: "1", // match any network
+      gas: 7900000
+    },
     rinkeby: {
       provider: function() {
         return new HDWalletProvider(mnemonic, "https://rinkeby.infura.io/M2xeaVefzxkLhvrTLq43")
       },
       network_id: 4
-    }  
+    }
   }
 };
 
-/* 
+/*
 Available Accounts
 ==================
 (0) 0x8ec75ef3adf6c953775d0738e0e7bd60e647e5ef
