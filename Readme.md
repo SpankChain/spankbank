@@ -583,3 +583,7 @@ BOOTY they claim.
         emit UpdateBootyBaseEvent(msg.sender);
     }
 ```
+
+## Testing + Development
+
+For testing instructions, see `test/Readme.md`

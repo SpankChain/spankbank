@@ -19,68 +19,64 @@ contract SpankBank {
     );
 
     event StakeEvent(
-        address indexed staker,
+        address staker,
         uint256 period,
         uint256 spankPoints,
         uint256 spankAmount,
-        uint256 stakePeriods
-    );
-
-    event PeriodEvent(
-        uint256 indexed period,
-        uint256 bootyFees,
-        uint256 totalSpankPoints,
-        uint256 bootyMinted,
-        uint256 closingVotes
+        uint256 stakePeriods,
+        address delegateKey,
+        address bootyBase
     );
 
     event SendFeesEvent (
-        address indexed sender,
+        address sender,
         uint256 bootyAmount
     );
 
     event MintBootyEvent (
-        uint256 indexed targetBootySupply,
-        uint256 indexed totalBootySupply
+        uint256 targetBootySupply,
+        uint256 totalBootySupply
     );
 
     event CheckInEvent (
-        address indexed staker,
+        address staker,
         uint256 period,
         uint256 spankPoints,
         uint256 stakerEndingPeriod
     );
 
     event ClaimBootyEvent (
-        address indexed staker,
-        uint256 indexed period,
-        uint256 indexed bootyOwed
+        address staker,
+        uint256 period,
+        uint256 bootyOwed
     );
 
     event WithdrawStakeEvent (
-        address indexed staker,
-        uint256 indexed totalSpankToWithdraw
+        address staker,
+        uint256 totalSpankToWithdraw
     );
 
     event SplitStakeEvent (
-        address indexed staker,
-        address indexed newAddress,
-        address indexed newDelegateKey,
+        address staker,
+        address newAddress,
+        address newDelegateKey,
         address newBootyBase,
         uint256 spankAmount
     );
 
     event VoteToCloseEvent (
-        address indexed staker,
+        address staker,
         uint256 period
     );
 
     event UpdateDelegateKeyEvent (
-        address indexed staker
+        address staker,
+        address newDelegateKey
     );
 
     event UpdateBootyBaseEvent (
-        address indexed staker
+        address staker,
+        address newBootyBase
     );
 
     event ReceiveApprovalEvent (
@@ -218,7 +214,9 @@ contract SpankBank {
             currentPeriod + 1,
             stakers[stakerAddress].spankPoints[currentPeriod + 1],
             spankAmount,
-            stakePeriods
+            stakePeriods,
+            delegateKey,
+            bootyBase
         );
     }
 
@@ -293,14 +291,6 @@ contract SpankBank {
     function updatePeriod() public {
         while (now >= periods[currentPeriod].endTime) {
             Period memory prevPeriod = periods[currentPeriod];
-            emit PeriodEvent(
-                currentPeriod,
-                prevPeriod.bootyFees,
-                prevPeriod.totalSpankPoints,
-                prevPeriod.bootyMinted,
-                prevPeriod.closingVotes
-            );
-
             currentPeriod += 1;
             periods[currentPeriod].startTime = prevPeriod.endTime;
             periods[currentPeriod].endTime = SafeMath.add(prevPeriod.endTime, periodLength);
@@ -438,7 +428,7 @@ contract SpankBank {
         staker.delegateKey = newDelegateKey;
         stakerByDelegateKey[newDelegateKey] = msg.sender;
 
-        emit UpdateDelegateKeyEvent(msg.sender);
+        emit UpdateDelegateKeyEvent(msg.sender, newDelegateKey);
     }
 
     function updateBootyBase(address newBootyBase) public {
@@ -447,7 +437,7 @@ contract SpankBank {
 
         staker.bootyBase = newBootyBase;
 
-        emit UpdateBootyBaseEvent(msg.sender);
+        emit UpdateBootyBaseEvent(msg.sender, newBootyBase);
     }
 
     function getSpankPoints(address stakerAddress, uint256 period) public view returns (uint256)  {
