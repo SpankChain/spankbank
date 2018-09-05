@@ -116,7 +116,7 @@ contract('SpankBank::integration', (accounts) => {
     { account: 'everything', action: 'checkIn' },
     { account: 'stakeMintClaim', action: 'checkIn' },
 
-    { action: 'burnBooty', amount: 1000000000000000000000 /* 1,000 out of 10K total*/},
+    { action: 'burnBooty', amount: '1000000000000000000000' /* 1,000 out of 10K total*/},
 
     { action: 'moveForwardPeriods' },
 
