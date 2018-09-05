@@ -399,7 +399,7 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe('Staking has ten requirements (counting logical AND requirements individually when possible).\n\t1. stake period greater than zero \n\t2. stake period less than or equal to maxPeriods \n\t3. stake greater than zero \n\t4. startingPeriod is zero \n\t5. transfer complete \n\t6. delegateKey is not 0x0 \n\t7. bootyBase is not 0x0 \n\t8. delegateKey -> stakerAddress is 0x0\n\t9. SpankBankIsOpen modifier\n', () => {
+  describe('Staking has ten requirements (counting logical AND requirements individually when possible).\n\t1. stake period greater than zero \n\t2. stake period less than or equal to maxPeriods \n\t3. stake greater than zero \n\t4. startingPeriod is zero \n\t5. transfer complete \n\t6. delegateKey is not 0x0 \n\t7. bootyBase is not 0x0 \n\t8. delegateKey -> stakerAddress is 0x0\n\t9. SpankBankIsOpen modifier\n\t10. proper receiveApproval caller\n', () => {
 
     beforeEach(async () => {
       await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
@@ -597,7 +597,7 @@ contract('SpankBank', (accounts) => {
     })
 
     it('9.2 SpankBankIsOpen modifier - receiveApproval staking fails', async () => {
-      // same as 0.6 two stakers test but staker1 calls voteToClose
+      // same as 0.7 two stakers test but staker1 calls voteToClose
 
       const extraData1 = makeExtraData(staker1)
       await spankToken.approveAndCall(spankbank.address, staker1.stake, extraData1, {from: staker1.address})
@@ -612,6 +612,27 @@ contract('SpankBank', (accounts) => {
 
       // only staker1 should have been able to stake via receiveApproval
       await verifyStake([staker1])
+    })
+
+    it.only('10. receiveApproval with invalid caller', async () => {
+      // If an external UI uses the approve->stake flow, someone else could
+      // intercept the staking flow and call receiveApproval maliciously on
+      // behalf of the staker. We prevent this by requiring that
+      // receiveApproval can only be called by the SPANK ERC20 token contract
+      const extraData1 = makeExtraData(staker1)
+      await spankToken.approveAndCall(spankbank.address, staker1.stake, extraData1, {from: staker1.address})
+
+      // must xfer SPANK to staker2 and aprove
+      await spankToken.transfer(staker2.address, staker2.stake, {from: owner})
+      await spankToken.approve(spankbank.address, staker2.stake, {from: staker2.address})
+
+      // maliciously update periods to 6
+      staker2.periods = 6
+      const extraData2 = makeExtraData(staker2)
+
+      // attempt to stake on behalf of staker2 as staker3 by calling
+      // receiveApproval directly
+      await spankbank.receiveApproval(staker2.address, staker2.stake, spankToken.address, extraData2, {from: staker3.address}).should.be.rejectedWith('invalid receiveApproval caller')
     })
   })
 
