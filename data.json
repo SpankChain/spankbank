@@ -7,7 +7,7 @@
         "address": "0x42d6622dece394b54999fbd73d108123806f6a18"
     },
     "spankbank": {
-        "periodLength": "2592000",
+        "periodLength": "2592069",
         "initialBootySupply": "10069000000000000000000",
         "maxPeriods": "12"
     },
