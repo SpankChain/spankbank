@@ -376,7 +376,7 @@ contract SpankBank {
         require(newDelegateKey != address(0), "delegateKey is zero");
         require(newBootyBase != address(0), "bootyBase is zero");
         require(stakerByDelegateKey[newDelegateKey] == address(0), "delegateKey in use");
-
+        require(stakers[newAddress].startingPeriod == 0, "staker already exists");
         require(spankAmount > 0, "spankAmount is zero");
 
         Staker storage staker = stakers[msg.sender];

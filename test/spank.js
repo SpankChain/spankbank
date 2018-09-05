@@ -1132,7 +1132,7 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe('splitStake has eight requirements\n\t1. the new staker address is not address(0)\n\t2. the new delegateKey is not address(0)\n\t3. the new bootyBase is not address(0)\n\t4. the new delegateKey is not already in use\n\t5. the stake amount to be split is greater than zero\n\t6. the current period is less than the stakers ending period\n\t7. the amount to be split is less than or equal to staker\'s stake\n\t8. the staker has no spank points for current period (has not yet checked in)\n', () => {
+  describe('splitStake has nine requirements\n\t1. the new staker address is not address(0)\n\t2. the new delegateKey is not address(0)\n\t3. the new bootyBase is not address(0)\n\t4. the new delegateKey is not already in use\n\t5. the new staker address is not already in use\n\t6. the stake amount to be split is greater than zero\n\t7. the current period is less than the stakers ending period\n\t8. the amount to be split is less than or equal to staker\'s stake\n\t9. the staker has no spank points for current period (has not yet checked in)\n', () => {
 
     const verifySplitStake = async (tx, staker1, staker2, splitAmount, totalSpankStaked) => {
       // by default, assumes staker1.stake is totalSpankStaked
@@ -1292,25 +1292,31 @@ contract('SpankBank', (accounts) => {
       await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith('delegateKey in use')
     })
 
-    it('5. splitStake fails - splitAmount must be greater than 0', async () => {
+    it('5. splitStake fails - new staker address is in use', async () => {
+      staker2.address = staker1.address
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith('staker already exists')
+    })
+
+    it('6. splitStake fails - splitAmount must be greater than 0', async () => {
       splitAmount = 0
       await moveForwardPeriods(1)
       await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith('spankAmount is zero')
     })
 
-    it('6. splitStake fails - staker expired', async () => {
+    it('7. splitStake fails - staker expired', async () => {
       await moveForwardPeriods(staker1.periods)
       await spankbank.updatePeriod()
       await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith('staker expired')
     })
 
-    it('7.1 splitStake fails - splitAmount exceeds staked spank', async () => {
+    it('8.1 splitStake fails - splitAmount exceeds staked spank', async () => {
       splitAmount = staker1.stake + 1
       await moveForwardPeriods(1)
       await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith('spankAmount greater than stake')
     })
 
-    it('7.2 splitStake fails - after 100% splitStake', async () => {
+    it('8.2 splitStake fails - after 100% splitStake', async () => {
       await moveForwardPeriods(1)
       const tx = await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
       await verifySplitStake(tx, staker1, staker2, splitAmount)
@@ -1318,7 +1324,7 @@ contract('SpankBank', (accounts) => {
       await spankbank.splitStake(staker3.address, staker3.delegateKey, staker3.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith('spankAmount greater than stake')
     })
 
-    it('7.3 splitStake fails - after voteToClose withdrawal', async () => {
+    it('8.3 splitStake fails - after voteToClose withdrawal', async () => {
       await moveForwardPeriods(1)
       await spankbank.voteToClose({from : staker1.address})
       await spankbank.withdrawStake({from: staker1.address})
@@ -1328,12 +1334,12 @@ contract('SpankBank', (accounts) => {
       await spankbank.splitStake(staker3.address, staker3.delegateKey, staker3.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
     })
 
-    it('8.1 splitStake fails - staker staked during the same period', async () => {
+    it('9.1 splitStake fails - staker staked during the same period', async () => {
       // skip moving forward periods
       await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith('staker has points for next period')
     })
 
-    it('8.2 splitStake fails - staker checked in during the same period', async () => {
+    it('9.2 splitStake fails - staker checked in during the same period', async () => {
       await moveForwardPeriods(1)
       await spankbank.checkIn(0, {from: staker1.delegateKey})
       const nextPeriod = +(await spankbank.currentPeriod()) + 1
@@ -1342,7 +1348,6 @@ contract('SpankBank', (accounts) => {
       await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith('staker has points for next period')
     })
   })
-
 
   describe('updating delegate key has three requirements\n\t1. new delegate key address is not address(0)\n\t2. delegate key is not already in use\n\t3. staker has a valid delegate key to update\n', () => {
 
