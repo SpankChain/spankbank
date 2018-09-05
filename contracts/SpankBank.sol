@@ -235,16 +235,6 @@ contract SpankBank {
         staker.spankPoints[currentPeriod + 1] = stakerPoints;
     }
 
-    // TODO remove
-    event testEvent(
-        address from,
-        uint256 amount,
-        address delegateKey,
-        address bootyBase,
-        uint256 periods
-    );
-
-    // TODO remove tokenContract
     function receiveApproval(address from, uint256 amount, address tokenContract, bytes extraData) SpankBankIsOpen public returns (bool success) {
         require(msg.sender == address(spankToken), "invalid receiveApproval caller");
 
@@ -252,10 +242,9 @@ contract SpankBank {
         address bootyBaseFromBytes = extraData.toAddress(44);
         uint256 periodFromBytes = extraData.toUint(64);
 
-        // emit ReceiveApprovalEvent(from, tokenContract);
-        emit testEvent(from, amount, delegateKeyFromBytes, bootyBaseFromBytes, periodFromBytes);
+        emit ReceiveApprovalEvent(from, tokenContract);
 
-        // doStake(from, amount, periodFromBytes, delegateKeyFromBytes, bootyBaseFromBytes);
+        doStake(from, amount, periodFromBytes, delegateKeyFromBytes, bootyBaseFromBytes);
         return true;
     }
 

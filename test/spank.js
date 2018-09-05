@@ -614,7 +614,7 @@ contract('SpankBank', (accounts) => {
       await verifyStake([staker1])
     })
 
-    it.only('10. receiveApproval with invalid caller', async () => {
+    it('10. receiveApproval with invalid caller', async () => {
       // If an external UI uses the approve->stake flow, someone else could
       // intercept the staking flow and call receiveApproval maliciously on
       // behalf of the staker. We prevent this by requiring that
