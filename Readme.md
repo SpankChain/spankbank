@@ -57,7 +57,7 @@ If a staker stakes for 12 periods but doesn't opt to extend their stake during c
 
 ##### Stakers
 
-The `Staker` struct stores all releveant data for each staker, and is saved in the `stakers` mapping by the staker's address.
+The `Staker` struct stores all relevant data for each staker, and is saved in the `stakers` mapping by the staker's address.
 
 ```
     struct Staker {
