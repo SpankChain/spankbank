@@ -57,7 +57,7 @@ If a staker stakes for 12 periods but doesn't opt to extend their stake during c
 
 ##### Stakers
 
-The `Staker` struct stores all releveant data for each staker, and is saved in the `stakers` mapping by the staker's address.
+The `Staker` struct stores all relevant data for each staker, and is saved in the `stakers` mapping by the staker's address.
 
 ```
     struct Staker {
@@ -78,7 +78,7 @@ The `staker.spankPoints` mapping stores the staker's spank points for each perio
 
 ##### Periods
 
-The `Period` struct stores all releveant data for each period, and is saved in the `periods` mapping by the period number.
+The `Period` struct stores all relevant data for each period, and is saved in the `periods` mapping by the period number.
 ```
     struct Period {
         uint256 bootyFees; // the amount of BOOTY collected in fees
