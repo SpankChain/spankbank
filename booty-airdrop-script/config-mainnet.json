@@ -1,0 +1,6 @@
+{
+  "rpcUrl": "https://mainnet.infura.io",
+  "spankBankAddress": "0xfc633eb1271e7520eddfae4a6a029a1d79fa6f78",
+  "bootyCsv": "./mainnet-booty.csv",
+  "address": "0x9CC7D6FCE44eff82fe561c9587C65346AE6130a1"
+}

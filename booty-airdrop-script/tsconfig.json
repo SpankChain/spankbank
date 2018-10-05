@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "es6",
+    "module": "commonjs",
+    "noImplicitAny": false,
+    "lib": [
+      "es5",
+      "es2015",
+      "es6",
+      "dom",
+      "es2017.object"
+    ],
+    "typeRoots": [
+      "node_modules/@types"
+    ],
+    "sourceMap": true,
+    "jsx": "react",
+    "allowJs": true,
+    "allowUnreachableCode": true,
+    "experimentalDecorators": true,
+    "forceConsistentCasingInFileNames": true,
+    "emitDecoratorMetadata": true,
+    "outDir": "./dist/",
+    "baseUrl": "."
+  },
+  "include": [
+    "*.ts"
+  ],
+  "typeRoots": [
+    "node_modules/@types"
+  ]
+}

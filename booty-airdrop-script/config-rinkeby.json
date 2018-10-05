@@ -1,0 +1,6 @@
+{
+  "rpcUrl": "https://rinkeby.infura.io",
+  "spankBankAddress": "0xfc633eb1271e7520eddfae4a6a029a1d79fa6f78",
+  "bootyCsv": "./rinkeby-booty.csv",
+  "address": "0x8ec75ef3adf6c953775d0738e0e7bd60e647e5ef"
+}
