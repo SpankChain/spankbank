@@ -1,4 +1,4 @@
-# SpankBank 
+# SpankBank
 
 The SpankBank is an algorithmic central bank that powers the two-token SpankChain economic system.
 
