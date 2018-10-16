@@ -1,1 +1,12 @@
+booty-airdrop-script
+build
 node_modules
+util
+.gitattributes
+.gitignore
+cloudbuild.yaml
+docker-compose.yaml
+Dockerfile
+Readme.md
+spankbank.go
+yarn.lock

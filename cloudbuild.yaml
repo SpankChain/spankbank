@@ -3,12 +3,10 @@ steps:
     args: [
       'build',
       '-t', 'spankbank:test',
-      '-f', 'infra/Dockerfile-test',
       '.'
     ]
   - name: 'docker/compose:1.18.0'
     args: ['up', '-d']
-    dir: 'infra'
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'run',
