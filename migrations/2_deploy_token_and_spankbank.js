@@ -3,7 +3,6 @@
 const fs = require('fs')
 
 const SpankToken = artifacts.require('./HumanStandardToken')
-const BootyToken = artifacts.require('./MintableToken')
 const SpankBank = artifacts.require('./SpankBank')
 
 module.exports = (deployer, network, accounts) => {
