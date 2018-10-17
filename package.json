@@ -10,6 +10,7 @@
     "ethjs-rpc": "^0.2.0"
   },
   "devDependencies": {
+    "ganache-cli": "^6.1.8",
     "solc": "^0.4.24",
     "truffle": "^5.0.0-beta.0",
     "truffle-hdwallet-provider": "0.0.5",
@@ -17,7 +18,9 @@
   },
   "scripts": {
     "clean": "rm -rf build/",
+    "ganache": "node_modules/.bin/ganache-cli -m 'fetch local valve black attend double eye excite planet primary install allow'",
     "compile": "node_modules/.bin/truffle compile",
+    "test": "node_modules/.bin/truffle test test/spank.js",
     "build": "npm run clean && npm run compile",
     "prepare": "npm run build"
   }
