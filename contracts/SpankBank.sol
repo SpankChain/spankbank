@@ -111,17 +111,24 @@ contract SpankBank {
     uint256 public currentPeriod = 0;
 
     struct Staker {
-        uint256 spankStaked; // the amount of spank staked
-        uint256 startingPeriod; // the period this staker started staking
-        uint256 endingPeriod; // the period after which this stake expires
+        uint256 totalSpank; // total SPANK staked at this address
+        uint256 stakeCount; // incrementing counter of stakeIds
+        mapping (uint256 => Stake) Stakes; // Stake referenced by stakeId
+        address delegateKey; // address used to call checkIn and claimBooty
+        address bootyBase; // destination address to receive BOOTY
         mapping(uint256 => uint256) spankPoints; // the spankPoints per period
         mapping(uint256 => bool) didClaimBooty; // true if staker claimed BOOTY for that period
         mapping(uint256 => bool) votedToClose; // true if staker voted to close for that period
-        address delegateKey; // address used to call checkIn and claimBooty
-        address bootyBase; // destination address to receive BOOTY
+    }
+
+    struct Stake {
+        uint256 spankStaked; // the amount of spank staked
+        uint256 startingPeriod; // the period this staker started staking
+        uint256 endingPeriod; // the period after which this stake expires
     }
 
     mapping(address => Staker) public stakers;
+    mapping(uint256 => Staker) public stakerByStakeId;
 
     struct Period {
         uint256 bootyFees; // the amount of BOOTY collected in fees
@@ -275,7 +282,7 @@ contract SpankBank {
         period.mintingComplete = true;
 
         uint256 targetBootySupply = SafeMath.mul(period.bootyFees, 20);
-        uint256 totalBootySupply = bootyToken.totalSupply();
+        uint256 totalBootySupply = bootyToken.totalSupply(); // TODO BOOTY v1 + v2
 
         if (targetBootySupply > totalBootySupply) {
             uint256 bootyMinted = targetBootySupply - totalBootySupply;
