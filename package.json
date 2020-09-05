@@ -1,20 +1,21 @@
 {
   "name": "@spankchain/spankbank",
   "main": "build",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "dependencies": {
-    "chai": "^4.1.2",
+    "chai": "^4.2.0",
     "chai-as-promised": "^7.1.1",
-    "chai-bignumber": "^2.0.2",
+    "chai-bignumber": "^3.0.0",
     "ethjs-provider-http": "^0.1.6",
     "ethjs-rpc": "^0.2.0"
   },
   "devDependencies": {
-    "ganache-cli": "6.1.8",
-    "solc": "0.4.24",
-    "truffle": "5.0.0-beta.0",
-    "truffle-hdwallet-provider": "0.0.5",
-    "web3-eth-abi": "1.0.0-beta.36"
+    "@truffle/hdwallet-provider": "1.0.43",
+    "ganache-cli": "6.10.1",
+    "pify": "^5.0.0",
+    "solc": "0.7.1",
+    "truffle": "5.1.43",
+    "web3-eth-abi": "1.2.11"
   },
   "scripts": {
     "clean": "rm -rf build/",
