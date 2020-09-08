@@ -546,13 +546,13 @@ contract('SpankBank', (accounts) => {
     it('6. staker delegate key is 0x0', async () => {
       staker1.delegateKey = "0x0000000000000000000000000000000000000000"
 
-      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith('delegateKey does not exist')
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith('delegateKey is zero')
     })
 
     it('7. staker bootyBase is 0x0', async () => {
       staker1.bootyBase = "0x0000000000000000000000000000000000000000"
 
-      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith('bootyBase does not exist')
+      await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address}).should.be.rejectedWith('bootyBase is zero')
     })
 
     it('8. delegateKey has already been used', async () => {
@@ -922,28 +922,28 @@ contract('SpankBank', (accounts) => {
       await spankbank.checkIn([web3.utils.fromAscii("bogusStakeXXX")], [0], {from: staker1.delegateKey}).should.be.rejectedWith('stake is zero')
     })
 
-  //   it('6.2 checkIn fails - splitStake 100%', async () => {
-  //     const stakeTx = await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
-  //     const {stakeId} = getEventParams(stakeTx, 'StakeEvent')
-  //     await moveForwardPeriods(1)
-  //     await spankbank.splitStake(staker2.address, staker2.delegateKey, staker2.bootyBase, staker1.stake, {from: staker1.address})
-  //     const spankStaker1 = await spankbank.stakers(staker1.address)
-  //     assert.equal(+spankStaker1.spankStaked, 0)
+    it('6.2 checkIn fails - splitStake 100%', async () => {
+      const stakeTx = await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+      const {stakeId} = getEventParams(stakeTx, 'StakeEvent')
+      await moveForwardPeriods(1)
+      await spankbank.splitStake(stakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, staker1.stake, {from: staker1.address})
+      const stake = await spankbank.stakes(stakeId)
+      assert.equal(+stake.spankStaked, 0)
 
-  //     await spankbank.checkIn([stakeId], [0], {from: staker1.delegateKey}).should.be.rejectedWith('staker stake is zero')
-  //   })
+      await spankbank.checkIn([stakeId], [0], {from: staker1.delegateKey}).should.be.rejectedWith('stake is zero')
+    })
 
-  //   it('6.3 checkIn fails - voteToClose -> withdraw', async () => {
-  //     const stakeTx = await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
-  //     const {stakeId} = getEventParams(stakeTx, 'StakeEvent')
-  //     await moveForwardPeriods(1)
-  //     await spankbank.voteToClose({ from: staker1.address })
-  //     await spankbank.withdrawStake({ from: staker1.address })
-  //     const spankStaker1 = await spankbank.stakers(staker1.address)
-  //     assert.equal(+spankStaker1.spankStaked, 0)
+    it('6.3 checkIn fails - voteToClose -> withdraw', async () => {
+      const stakeTx = await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+      const {stakeId} = getEventParams(stakeTx, 'StakeEvent')
+      await moveForwardPeriods(1)
+      await spankbank.voteToClose({ from: staker1.address })
+      await spankbank.withdrawStake([stakeId], { from: staker1.address })
+      const stake = await spankbank.stakes(stakeId)
+      assert.equal(+stake.spankStaked, 0)
 
-  //     await spankbank.checkIn([stakeId], [0], {from: staker1.delegateKey}).should.be.rejectedWith(SolRevert)
-  //   })
+      await spankbank.checkIn([stakeId], [0], {from: staker1.delegateKey}).should.be.rejectedWith(SolRevert)
+    })
   })
 
   // describe('claiming BOOTY has four requirements\n\t1. staker spankpoints > 0 for period\n\t2. staker must not have claimed for claiming period\n\t3. minting of booty must have been completed for the claiming period\n\t4.transfer complete (not verified in tests)\n', () => {
