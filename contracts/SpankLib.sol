@@ -1,9 +1,9 @@
 pragma solidity ^0.4.24;
 
 /**
- * @title Mappings Library Data Model
- * @dev This library defines the data structures and internal functions to be used in conjunction with the MappingsLib library.
- * This library is not intended to be deployed, but only serves a compile-time dependency.
+ * @title Spank Library
+ * @dev This library defines the data structures and internal functions to be used in conjunction with the SpankBank.
+ * This library is not intended to be deployed, but only serves as a compile-time dependency.
  */
 library SpankLib {
 
