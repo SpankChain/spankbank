@@ -3,13 +3,15 @@ import {SafeMath} from "./SafeMath.sol";
 import {HumanStandardToken} from "./HumanStandardToken.sol";
 import {MintAndBurnToken} from "./MintAndBurnToken.sol";
 import "./BytesLib.sol";
-import {SpankLib as Spank} from "./SpankLib.sol";
 
 contract SpankBank {
+
     using BytesLib for bytes;
     using SafeMath for uint256;
-    using Spank for Spank.Stakes;
 
+    /***********************************
+        EVENTS
+    ************************************/
     event SpankBankCreated(
         uint256 periodLength,
         uint256 maxPeriods,
@@ -65,9 +67,9 @@ contract SpankBank {
         bytes32 toStakeId,
         address fromStaker,
         address toStaker,
+        uint256 spankAmount,
         address newDelegateKey,
-        address newBootyBase,
-        uint256 spankAmount
+        address newBootyBase
     );
 
     event VoteToCloseEvent (
@@ -89,6 +91,37 @@ contract SpankBank {
         address from,
         address tokenContract
     );
+
+    /***********************************
+        DATA STRUCTURES
+    ************************************/
+    struct Staker {
+        uint256 totalSpank; // total SPANK staked at this address
+        address delegateKey; // address used to call checkIn and claimBooty
+        address bootyBase; // destination address to receive BOOTY
+        bytes32[] stakes; // the stake IDs
+        mapping(uint256 => uint256) spankPoints; // the spankPoints per period
+        mapping(uint256 => bool) didClaimBooty; // true if staker claimed BOOTY for that period
+        mapping(uint256 => bool) votedToClose; // true if staker voted to close for that period
+    }
+
+    struct Stake {
+        address owner; // the staker address
+        uint256 spankStaked; // the amount of spank staked
+        uint256 startingPeriod; // the period this staker started staking
+        uint256 endingPeriod; // the period after which this stake expires
+        uint256 lastAppliedToPeriod; // the period to which this stake has last been applied as points to receive booty
+    }
+
+    struct Period {
+        uint256 bootyFees; // the amount of BOOTY collected in fees
+        uint256 totalSpankPoints; // the total spankPoints of all stakers
+        uint256 bootyMinted; // the amount of BOOTY minted
+        bool mintingComplete; // true if BOOTY has already been minted for this period
+        uint256 startTime; // the starting unix timestamp in seconds
+        uint256 endTime; // the ending unix timestamp in seconds
+        uint256 closingVotes; // the total votes to close this period
+    }
 
     /***********************************
     VARIABLES SET AT CONTRACT DEPLOYMENT
@@ -116,9 +149,9 @@ contract SpankBank {
     **************************************/
     uint256 public currentPeriod = 0;
 
-    mapping(bytes32 => Spank.Stake) public stakes;
-    mapping(address => Spank.Staker) public stakers;
-    mapping(uint256 => Spank.Period) public periods;
+    mapping(bytes32 => Stake) public stakes;
+    mapping(address => Staker) public stakers;
+    mapping(uint256 => Period) public periods;
     mapping(address => address) public stakerByDelegateKey;
 
     modifier SpankBankIsOpen() {
@@ -127,6 +160,7 @@ contract SpankBank {
     }
 
     // TODO constructor needs the old booty address
+    // TODO initialBootySupply is probably obsolete since stakers earn spank immediately in the next period now, even when entering on period 0 and no airdrop is needed.
     constructor (
         uint256 _periodLength,
         uint256 _maxPeriods,
@@ -140,7 +174,9 @@ contract SpankBank {
         maxPeriods = _maxPeriods;
         spankToken = HumanStandardToken(spankAddress);
         bootyToken = new MintAndBurnToken(bootyTokenName, bootyDecimalUnits, bootySymbol);
-        bootyToken.mint(this, initialBootySupply);
+        if (initialBootySupply > 0) {
+            bootyToken.mint(this, initialBootySupply);
+        }
 
         uint256 startTime = now;
 
@@ -172,7 +208,7 @@ contract SpankBank {
      * automatically registered using the provided delegateKey and bootyBase parameters. Otherwise, if the msg.sender is
      * a known staker, these parameters are ignored.
      * Reverts if
-     * - stakePeriods is out of allowed range [1-maxPeriods]
+     * - stakePeriods is outside of allowed range [1-maxPeriods]
      * - spankAmount is zero
      * - the transfer of Spank tokens into the SpankBank fails
      * - delegateKey is zero address (only for new staker address)
@@ -204,7 +240,7 @@ contract SpankBank {
             require(stakerByDelegateKey[delegateKey] == address(0), "delegateKey already used");
             stakerByDelegateKey[delegateKey] = stakerAddress;
             bytes32[] memory stakeIDs;
-            stakers[stakerAddress] = Spank.Staker(spankAmount, delegateKey, bootyBase, stakeIDs);
+            stakers[stakerAddress] = Staker(spankAmount, delegateKey, bootyBase, stakeIDs);
         }
         else {
             stakers[stakerAddress].totalSpank = SafeMath.add(stakers[stakerAddress].totalSpank, spankAmount);
@@ -214,9 +250,9 @@ contract SpankBank {
         // this will not cause any hash collisions as long as no stakes are deleted
         bytes32 stakeId = keccak256(abi.encodePacked(stakerAddress, stakers[stakerAddress].stakes.length));
         stakers[stakerAddress].stakes.push(stakeId);
-        stakes[stakeId] = Spank.Stake(stakerAddress, spankAmount, currentPeriod, currentPeriod + stakePeriods - 1, 0);
+        stakes[stakeId] = Stake(stakerAddress, spankAmount, currentPeriod, currentPeriod + stakePeriods - 1, 0);
 
-        _applyStakeToCurrentPeriod(stakeId);
+        uint256 stakePoints = _applyStakeToCurrentPeriod(stakeId);
 
         totalSpankStaked = SafeMath.add(totalSpankStaked, spankAmount);
 
@@ -224,7 +260,7 @@ contract SpankBank {
             stakeId,
             stakerAddress,
             currentPeriod,
-            stakers[stakerAddress].spankPoints[currentPeriod],
+            stakePoints,
             spankAmount,
             stakePeriods,
             delegateKey,
@@ -238,13 +274,14 @@ contract SpankBank {
      * for the same stake.
      *
      * @param stakeId - the stake ID being used for points towards the current period
+     * @return stakePoints - the generated points of this stake
      */
-    function _applyStakeToCurrentPeriod(bytes32 stakeId) internal {
-        Spank.Stake storage stk = stakes[stakeId];
-        Spank.Staker storage staker = stakers[stk.owner];
+    function _applyStakeToCurrentPeriod(bytes32 stakeId) internal returns (uint256 stakePoints) {
+        Stake storage stk = stakes[stakeId];
+        Staker storage staker = stakers[stk.owner];
 
         uint256 stakePeriods = stk.endingPeriod - currentPeriod + 1; // + 1 is added to correctly calculate the total number of staking periods *including* the currentPeriod
-        uint256 stakePoints = SafeMath.div(SafeMath.mul(stk.spankStaked, pointsTable[stakePeriods]), 100);
+        stakePoints = SafeMath.div(SafeMath.mul(stk.spankStaked, pointsTable[stakePeriods]), 100);
 
         // add staker spankpoints to total spankpoints for this period
         uint256 totalPoints = periods[currentPeriod].totalSpankPoints;
@@ -305,7 +342,7 @@ contract SpankBank {
         // can't mint BOOTY during period 0 - would result in integer underflow
         require(currentPeriod > 0, "current period is zero");
 
-        Spank.Period storage period = periods[currentPeriod - 1];
+        Period storage period = periods[currentPeriod - 1];
         require(!period.mintingComplete, "minting already complete"); // cant mint BOOTY twice
 
         period.mintingComplete = true;
@@ -329,7 +366,7 @@ contract SpankBank {
      */
     function updatePeriod() public {
         while (now >= periods[currentPeriod].endTime) {
-            Spank.Period memory prevPeriod = periods[currentPeriod];
+            Period memory prevPeriod = periods[currentPeriod];
             currentPeriod += 1;
             periods[currentPeriod].startTime = prevPeriod.endTime;
             periods[currentPeriod].endTime = SafeMath.add(prevPeriod.endTime, periodLength);
@@ -355,10 +392,10 @@ contract SpankBank {
         updatePeriod();
 
         address stakerAddress =  stakerByDelegateKey[msg.sender];
-        Spank.Staker storage staker = stakers[stakerAddress];
+        Staker storage staker = stakers[stakerAddress];
 
         for (uint256 i = 0; i < stakeIds.length; i++) {
-            Spank.Stake storage stk = stakes[stakeIds[i]];
+            Stake storage stk = stakes[stakeIds[i]];
             require(stk.spankStaked > 0, "stake is zero");
             require(stk.owner == stakerAddress, "stake has different owner");
             require(currentPeriod <= stk.endingPeriod, "stake is expired");
@@ -389,9 +426,9 @@ contract SpankBank {
         updatePeriod();
 
         address stakerAddress = stakerByDelegateKey[msg.sender];
-        Spank.Staker storage staker = stakers[stakerAddress];
+        Staker storage staker = stakers[stakerAddress];
         uint256 totalBootyOwed;
-        Spank.Period memory period;
+        Period memory period;
         for (uint256 i = 0; i < claimPeriods.length; i++) {
             require(claimPeriods[i] < currentPeriod, "claimPeriod must be less than currentPeriod");
             period = periods[claimPeriods[i]];
@@ -424,11 +461,11 @@ contract SpankBank {
     function withdrawStake(bytes32[] stakeIds) public {
         updatePeriod();
 
-        Spank.Staker storage staker = stakers[msg.sender];
+        Staker storage staker = stakers[msg.sender];
 
         uint256 spankToWithdraw = 0;
         for (uint256 i = 0; i < stakeIds.length; i++) {
-            Spank.Stake storage stk = stakes[stakeIds[i]];
+            Stake storage stk = stakes[stakeIds[i]];
             require(isClosed || currentPeriod > stk.endingPeriod + 1, "currentPeriod less than waiting period or spankbank not closed");
             require(stk.spankStaked > 0, "stake is zero");
             require(stk.owner == msg.sender, "stake has different owner");
@@ -448,6 +485,8 @@ contract SpankBank {
      * staker. If the receiving staker is perviously unknown, a new staker will automatically be registered using
      * the delegateKey and bootyBase parameters; for an existing staker, these are optional.
      * The created stake will inherit the starting and ending period attributes of the source stake.
+     * Note: Unlike the #stake() function, there is no automatic application of points for the newly created stake. The new staker still has
+     * to perform a check-in on the current period after the split!
      * Reverts if
      * - newAddress is zero address
      * - spankAmount is zero
@@ -469,7 +508,7 @@ contract SpankBank {
         require(newAddress != address(0), "newAddress is zero");
         require(spankAmount > 0, "spankAmount is zero");
 
-        Spank.Stake storage sourceStake = stakes[stakeId];
+        Stake storage sourceStake = stakes[stakeId];
         require(sourceStake.spankStaked > 0, "stake is zero");
         require(sourceStake.owner == msg.sender, "stake has different owner");
         require(currentPeriod <= sourceStake.endingPeriod, "stake is expired");
@@ -482,24 +521,39 @@ contract SpankBank {
             require(newBootyBase != address(0), "bootyBase is zero");
             require(stakerByDelegateKey[newDelegateKey] == address(0), "delegateKey already used");
             bytes32[] memory stakeIDs;
-            stakers[newAddress] = Spank.Staker(0, newDelegateKey, newBootyBase, stakeIDs); // initialize totalSpank as 0. spankAmount is added below
+            stakers[newAddress] = Staker(spankAmount, newDelegateKey, newBootyBase, stakeIDs);
             stakerByDelegateKey[newDelegateKey] = newAddress;
+        }
+        else {
+            stakers[newAddress].totalSpank = SafeMath.add(stakers[newAddress].totalSpank, spankAmount);
         }
 
         bytes32 newStakeId = keccak256(abi.encodePacked(newAddress, stakers[newAddress].stakes.length));
-        Spank.Staker storage staker = stakers[msg.sender];
+        Staker storage staker = stakers[msg.sender];
         sourceStake.spankStaked = SafeMath.sub(sourceStake.spankStaked, spankAmount);
         staker.totalSpank = SafeMath.sub(staker.totalSpank, spankAmount);
 
         stakers[newAddress].stakes.push(newStakeId);
-        stakers[newAddress].totalSpank = SafeMath.add(stakers[newAddress].totalSpank, spankAmount);
-        stakes[newStakeId] = Spank.Stake(newAddress, spankAmount, sourceStake.startingPeriod, sourceStake.endingPeriod, 0);
+        stakes[newStakeId] = Stake(newAddress, spankAmount, sourceStake.startingPeriod, sourceStake.endingPeriod, 0);
 
-        emit SplitStakeEvent(stakeId, newStakeId, msg.sender, newAddress, newDelegateKey, newBootyBase, spankAmount);
+        emit SplitStakeEvent(
+            stakeId,
+            newStakeId,
+            msg.sender,
+            newAddress,
+            spankAmount,
+            newDelegateKey,
+            newBootyBase
+        );
     }
 
     /**
-     * @dev Records a vote for the msg.sender staker in favor of closing the SpankBank.
+     * @dev Records a vote for the msg.sender staker in favor of closing the SpankBank. In order to be eligible to add their vote,
+     * stakers must have at least one active stake, i.e. a stake that is not expired with a non-zero amount of 
+
+     // TODO there is a small potential (resolvable) deadlock hidden in this function: If the majority of stakes are expired, but not withdrawn, this could prevent all active stakers from reaching a majority vote. (expired, but not withdrawn stakes still count towards the totalSpankStaked of the bank)
+     Solution: Run the closing logic during withdrawStake() to see if it shifted the ratio and reached the closing threshold or (simpler), someone with enough SPANK would open a new stake to help get over the threshold.
+
      * Reverts if:
      * - the staker has no Spank staked
      * - the staker has no active (not expired) stakes
@@ -509,14 +563,14 @@ contract SpankBank {
     function voteToClose() public {
         updatePeriod();
 
-        Spank.Staker storage staker = stakers[msg.sender];
+        Staker storage staker = stakers[msg.sender];
 
-        require(staker.totalSpank > 0, "stake is zero");
-        // voting requires the staker to have at least one active stake // TODO need to check spankStaked? which would make the totalSpank check above obsolete?
+        require(staker.totalSpank > 0, "staker has no Spank"); // this is just a shortcut to avoid the below loop for older stakers that had many stakes, but withdrew all
+        // voting requires the staker to have at least one active stake
         bool activeStakes = false;
         // this is the only 'growing' loop in the bank, but should be ok since it aborts looping as soon as one active stake is found
         for (uint256 i = 0; i < staker.stakes.length; i++) {
-            if(currentPeriod <= stakes[staker.stakes[i]].endingPeriod) {
+            if(currentPeriod <= stakes[staker.stakes[i]].endingPeriod && stakes[staker.stakes[i]].spankStaked > 0) {
                 activeStakes = true;
                 break;
             }
@@ -552,7 +606,7 @@ contract SpankBank {
         require(newDelegateKey != address(0), "delegateKey is zero");
         require(stakerByDelegateKey[newDelegateKey] == address(0), "delegateKey already used");
 
-        Spank.Staker storage staker = stakers[msg.sender];
+        Staker storage staker = stakers[msg.sender];
         require(staker.stakes.length > 0, "staker does not exist");
 
         stakerByDelegateKey[staker.delegateKey] = address(0);
@@ -570,7 +624,7 @@ contract SpankBank {
      * @param newBootyBase - the new delegateKey
      */
     function updateBootyBase(address newBootyBase) public {
-        Spank.Staker storage staker = stakers[msg.sender];
+        Staker storage staker = stakers[msg.sender];
         require(staker.stakes.length > 0, "staker does not exist");
 
         staker.bootyBase = newBootyBase;
