@@ -23,7 +23,7 @@ const { decToBytes, addrToBytes } = require('./utils')
 
 const e18 = new BN("1000000000000000000") // 1e18
 
-const data = require('../data.json')
+const data = require('../data.json');
 const initialBootySupply = data.spankbank.initialBootySupply / e18 // should be 10,000
 
 const getBlock = util.promisify(web3.eth.getBlock.bind(web3))
@@ -1113,7 +1113,15 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe('splitStake has nine requirements\n\t1. the new staker address is not address(0)\n\t2. the new delegateKey is not address(0)\n\t3. the new bootyBase is not address(0)\n\t4. the new delegateKey is not already in use\n\t5. the new staker address is not already in use\n\t6. the stake amount to be split is greater than zero\n\t7. the current period is less than the stakers ending period\n\t8. the amount to be split is less than or equal to staker\'s stake\n\t9. the staker has no spank points for current period (has not yet checked in)\n', () => {
+  describe('splitStake has 8 requirements\n\t' +
+  '1. the new staker address is not address(0)\n\t' +
+  '2. the new delegateKey is not address(0)\n\t' +
+  '3. the new bootyBase is not address(0)\n\t' +
+  '4. the new delegateKey is not already in use\n\t' +
+  '5. the stake amount to be split is greater than zero\n\t' +
+  '6. the current period is less than the stakers ending period\n\t' +
+  '7. the amount to be split is less than or equal to staker\'s stake\n\t' +
+  '8. the stake was not yet applied to the current period (via checkIn or stake)', () => {
 
     const verifySplitStake = async (tx, splitStakeId, staker1, staker2, splitAmount, totalSpankStaked) => {
       // by default, assumes staker1.stake is totalSpankStaked
@@ -1281,32 +1289,25 @@ contract('SpankBank', (accounts) => {
       await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith('delegateKey already used')
     })
 
-    // TODO remove. This test is no longer relevant as we allow a staker to exist and hold multiple stakes now
-    // it('5. splitStake fails - new staker address is in use', async () => {
-    //   staker2.address = staker1.address
-    //   await moveForwardPeriods(1)
-    //   await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith('staker already exists')
-    // })
-
-    it('6. splitStake fails - splitAmount must be greater than 0', async () => {
+    it('5. splitStake fails - splitAmount must be greater than 0', async () => {
       splitAmount = 0
       await moveForwardPeriods(1)
       await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith('spankAmount is zero')
     })
 
-    it('7. splitStake fails - staker expired', async () => {
+    it('6. splitStake fails - staker expired', async () => {
       await moveForwardPeriods(staker1.periods)
       await spankbank.updatePeriod()
       await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith('stake is expired')
     })
 
-    it('8.1 splitStake fails - splitAmount exceeds staked spank', async () => {
+    it('7.1 splitStake fails - splitAmount exceeds staked spank', async () => {
       splitAmount = staker1.stake + 1
       await moveForwardPeriods(1)
       await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith('spankAmount greater than stake')
     })
 
-    it('8.2 splitStake fails - after 100% splitStake', async () => {
+    it('7.2 splitStake fails - after 100% splitStake', async () => {
       await moveForwardPeriods(1)
       const tx = await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
       await verifySplitStake(tx, splitStakeId, staker1, staker2, splitAmount)
@@ -1314,7 +1315,7 @@ contract('SpankBank', (accounts) => {
       await spankbank.splitStake(splitStakeId, staker3.address, staker3.delegateKey, staker3.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith('stake is zero')
     })
 
-    it('8.3 splitStake fails - after voteToClose withdrawal', async () => {
+    it('7.3 splitStake fails - after voteToClose withdrawal', async () => {
       await moveForwardPeriods(1)
       await spankbank.voteToClose({from : staker1.address})
       await spankbank.withdrawStake([splitStakeId], {from: staker1.address})
@@ -1324,18 +1325,109 @@ contract('SpankBank', (accounts) => {
       await spankbank.splitStake(splitStakeId, staker3.address, staker3.delegateKey, staker3.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith(SolRevert)
     })
 
-    it('9.1 splitStake fails - staker staked during the same period', async () => {
+    it('8.1 splitStake fails - stake already applied to current period (via stake)', async () => {
       // skip moving forward periods
       await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith('stake already applied to current period')
     })
 
-    it('9.2 splitStake fails - staker checked in during the same period', async () => {
+    it('8.2 splitStake fails - stake already applied to current period (via checkIn)', async () => {
       await moveForwardPeriods(1)
       await spankbank.checkIn([splitStakeId], [0], {from: staker1.delegateKey})
       currentPeriod = +(await spankbank.currentPeriod())
       const spankPoints = await spankbank.getSpankPoints.call(staker1.address, 1)
       assert.isAbove(+spankPoints, 0)
       await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith('stake already applied to current period')
+    })
+  })
+
+  describe('increaseStake has 3 requirements\n\t' +
+  '1. the increase is greater than zero\n\t' +
+  '2. the msg.sender is the owner of the stake' +
+  '3. the stake is not expired\n\t' +
+  '4. the stake was not yet applied to the current period (via checkIn or stake)', () => {
+
+    const verifyIncreaseStake = async (tx, stakeId, stakerAddress, stakeBefore, totalSpankBefore, increaseAmount) => {
+
+      const increasedStake = await spankbank.stakes(stakeId)
+      // spankStaked should be added/subtracted properly
+      assert.equal(+increasedStake.spankStaked, stakeBefore + increaseAmount)
+
+      // staker's totalSpank should have increased
+      const staker = await spankbank.stakers(stakerAddress)
+      assert.equal(+staker.totalSpank, staker1.stake + increaseAmount)
+
+      // spankBank SPANK has increased
+      const bankedSpankBalance = await spankToken.balanceOf(spankbank.address)
+      assert.equal(+bankedSpankBalance, totalSpankBefore + increaseAmount)
+
+      // split stake event
+      const increasedStakeEventPayload = getEventParams(tx, "IncreaseStakeEvent")
+      assert.equal(increasedStakeEventPayload.stakeId, stakeId)
+      assert.equal(+increasedStakeEventPayload.staker, stakerAddress)
+      assert.equal(+increasedStakeEventPayload.increaseAmount, increaseAmount)
+      assert.equal(+increasedStakeEventPayload.newSpankStaked, increasedStake.spankStaked)
+    }
+
+    beforeEach(async () => {
+      await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
+      await spankToken.approve(spankbank.address, staker1.stake, {from: staker1.address})
+      const stakeTx = await spankbank.stake(staker1.stake, staker1.periods, staker1.delegateKey, staker1.bootyBase, {from : staker1.address})
+      stakeId = getEventParams(stakeTx, 'StakeEvent').stakeId;
+    })
+
+    it('0.1 increaseStake successful - increase small amount', async () => {
+      await moveForwardPeriods(1)
+      // we increase the stake by 50% of its original amount
+      const increaseAmount = staker1.stake / 2
+      await spankToken.transfer(staker1.address, increaseAmount, {from: owner})
+      await spankToken.approve(spankbank.address, increaseAmount, {from: staker1.address})
+      const totalSpankBefore = await spankToken.balanceOf(spankbank.address)
+      const tx = await spankbank.increaseStake(stakeId, increaseAmount, {from: staker1.address})
+      await verifyIncreaseStake(tx, stakeId, staker1.address, staker1.stake, +totalSpankBefore, increaseAmount)
+    })
+
+    it('0.2 increaseStake successful - increase large amount', async () => {
+      await moveForwardPeriods(1)
+      // we increase the stake to 11x its original amount
+      const increaseAmount = staker1.stake * 10
+      await spankToken.transfer(staker1.address, increaseAmount, {from: owner})
+      await spankToken.approve(spankbank.address, increaseAmount, {from: staker1.address})
+      const totalSpankBefore = await spankToken.balanceOf(spankbank.address)
+      const tx = await spankbank.increaseStake(stakeId, increaseAmount, {from: staker1.address})
+      await verifyIncreaseStake(tx, stakeId, staker1.address, staker1.stake, +totalSpankBefore, increaseAmount)
+    })
+
+    it('1. increaseStake fails - no increase amount', async () => {
+      await moveForwardPeriods(1)
+      const increaseAmount = 0
+      await spankbank.increaseStake(stakeId, increaseAmount, {from: staker1.address}).should.be.rejectedWith('increaseAmount is zero')
+    })
+
+    it('2. increaseStake fails - stake is expired', async () => {
+      await moveForwardPeriods(staker1.periods)
+      const increaseAmount = staker1.stake
+      await spankbank.increaseStake(stakeId, increaseAmount, {from: staker1.address}).should.be.rejectedWith('stake is expired')
+    })
+
+    it('3. increaseStake fails - wrong stake owner', async () => {
+      await moveForwardPeriods(staker1.stakePeriods)
+      const increaseAmount = staker1.stake
+      await spankbank.increaseStake(stakeId, increaseAmount, {from: staker2.address}).should.be.rejectedWith('stake has different owner')
+    })
+
+    it('3.1 increaseStake fails - stake already applied after check-in', async () => {
+      await moveForwardPeriods(1)
+      await spankbank.checkIn([stakeId], [0], {from: staker1.address})
+      const stake = await spankbank.stakes(stakeId)
+      assert.equal(+stake.lastAppliedToPeriod, currentPeriod)
+      const increaseAmount = staker1.stake
+      await spankbank.increaseStake(stakeId, increaseAmount, {from: staker1.address}).should.be.rejectedWith('stake already applied to current period')
+    })
+
+    it('3.2 increaseStake fails - stake already applied after from staking', async () => {
+      // skip moveForwardPeriods() to remain in staking period
+      const increaseAmount = staker1.stake
+      await spankbank.increaseStake(stakeId, increaseAmount, {from: staker1.address}).should.be.rejectedWith('stake already applied to current period')
     })
   })
 
@@ -1595,7 +1687,7 @@ contract('SpankBank', (accounts) => {
     })
 
     it('1.1 voteToClose fails - staker spank is greater than zero - non-staker', async () => {
-      await spankbank.voteToClose({from : staker3.address}).should.be.rejectedWith('stake is zero')
+      await spankbank.voteToClose({from : staker3.address}).should.be.rejectedWith('staker has no Spank')
     })
 
     it('1.2 voteToClose fails - staker spank is greater than zero - splitStaked 100% of stake', async () => {
@@ -1605,7 +1697,7 @@ contract('SpankBank', (accounts) => {
       const stake1 = await spankbank.stakes(stake1Id)
       assert.equal(+stake1.spankStaked, 0)
 
-      await spankbank.voteToClose({from : staker1.address}).should.be.rejectedWith('stake is zero')
+      await spankbank.voteToClose({from : staker1.address}).should.be.rejectedWith('staker has no Spank')
     })
 
     it('2. voteToClose fails - no active stakes', async () => {

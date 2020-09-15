@@ -72,6 +72,13 @@ contract SpankBank {
         address newBootyBase
     );
 
+    event IncreaseStakeEvent (
+        bytes32 stakeId,
+        address staker,
+        uint256 increaseAmount,
+        uint256 newSpankStaked
+    );
+
     event VoteToCloseEvent (
         address staker,
         uint256 period
@@ -204,9 +211,12 @@ contract SpankBank {
     }
 
     /**
-     * @dev Creates a new staking position for the msg.sender. If this is the first stake for this stakerAddress, the staker is
+     * @notice Creates a new staking position for the msg.sender. If this is the first stake for this stakerAddress, the staker is
      * automatically registered using the provided delegateKey and bootyBase parameters. Otherwise, if the msg.sender is
      * a known staker, these parameters are ignored.
+     * After the stake is created, it is immediately applied to the current period, so that the staker is not required to check-in
+     * anymore. Due to the automatic check-in on the first staking period, the staker must wait until the next period before splitStake
+     * or increaseStake can be called.
      * Reverts if
      * - stakePeriods is outside of allowed range [1-maxPeriods]
      * - spankAmount is zero
@@ -269,9 +279,9 @@ contract SpankBank {
     }
 
     /**
-     * @dev Called during stake and checkIn to generate points from a stake and apply them towards the current period. Afterwards, the stake is marked
-     * as having been applied, however, this function does not actively check that flag; calling functions must do so to prevent duplicate points
-     * for the same stake.
+     * @notice Called during stake and checkIn to generate points from the given stake and apply them towards the current period. Afterwards, the stake is marked
+     * as having been applied. However, this function does not actively check the `lastAppliedToPeriod` value, because it would prevent points being applied in period 0.
+     * Calling functions must `require(stk.lastAppliedToPeriod < currentPeriod)` to prevent duplicate points for the same stake.
      *
      * @param stakeId - the stake ID being used for points towards the current period
      * @return stakePoints - the generated points of this stake
@@ -306,7 +316,7 @@ contract SpankBank {
     }
 
     /**
-     * @dev Reports fees for the current period by transferring the specified amount of Booty from the msg.sender into the SpankBank.
+     * @notice Reports fees for the current period by transferring the specified amount of Booty from the msg.sender into the SpankBank.
      * The accumulated fees will be burnt upon calling mintBooty() in the following period.
      * Reverts if
      * - the bootyAmount is zero
@@ -330,11 +340,12 @@ contract SpankBank {
     }
 
     /**
-     * @dev Performs the minting process for the previous period by burning that period's
-     * fees and minting and distributing new Booty according to the target supply rules.
+     * @notice Performs the minting process for the last period by burning last period's fees,
+     * then checking the current BOOTY supply against the target supply rules and, if necessary,
+     * minting BOOTY to be claimed by stakers with applied (checked-in) stakes in the last period.
      * Reverts if
      * - the current period is zero and therefore no previous period exists
-     * - minting has already been performed for the previous period
+     * - minting has already been performed for this period
      */
     function mintBooty() SpankBankIsOpen public {
         updatePeriod();
@@ -359,7 +370,7 @@ contract SpankBank {
     }
 
     /**
-     * @dev Checks the current time and updates the current period accordingly.
+     * @notice Checks the current time and updates the current period accordingly.
      * - called from all write functions to ensure the period is always up to date before any writes
      * - can also be called externally, but there isn't a good reason for why you would want to
      * - the while loop protects against the edge case where we miss a period
@@ -374,16 +385,17 @@ contract SpankBank {
     }
 
     /**
-     * @dev In order to receive Booty, each staker must check-in every period.
+     * @notice In order to receive Booty, each staker must check-in once per period.
      * This check-in will compute the spankPoints locally and globally for each staker.
-     * Example: Staker has 5 stakes. Calling `checkIn([0,3], [38,0])` will perform a check-in
-     * on stakes 1 and 4 with the ending period of stake 4 being set to period 38.
+     * Usage example:
+     * - Staker has multiple stakes.
+     * - Calling `checkIn(["0x123456","0x1a2b3c"], [38,0])` will perform a check-in on the stakes with the given bytes32 IDs and update the second stake's endingPeriod to 38.
      * Reverts if:
-     * - stake is empty, e.g. because it's been withdrawn or it does not exist
-     * - caller is not the original staker or delegate of the staker
-     * - stake is expired
-     * - a check-in for a period already happened
-     * - an update for a stake's ending period is less than its current ending period or exceeds currentPeriod + maxPeriods
+     * - a stake is empty, e.g. because it's been withdrawn or it does not exist
+     * - the caller is not the owner of the stake or delegate of the staker
+     * - a stake is expired
+     * - a stake has already been applied to the current period (e.g. via checkIn or stake)
+     * - an update for a stake's ending period is less than its current ending period or is >= currentPeriod + maxPeriods
      *
      * @param stakeIds - an array of Stake IDs for which the staker would like to check in
      * @param updatedEndingPeriods - an array of updated ending periods matching the indexes of the stakeIds. A 0-value indicates no update for that stake.
@@ -412,7 +424,7 @@ contract SpankBank {
     }
 
     /**
-     * @dev Performs a withdrawal of all booty the msg.sender has accumulated over the specified periods. All periods being claimed
+     * @notice Performs a withdrawal of all booty the msg.sender has accumulated over the specified periods. All periods being claimed
      * must meet eligibility requirements or the transaction will revert.
      * Reverts if
      * - a claimPeriod is not less than the currentPeriod
@@ -447,9 +459,9 @@ contract SpankBank {
     }
 
     /**
-     * @dev Withdraws the staked Spank from the specified stakes. Stakes can only be withdrawn after a wait period after their expiration,
-     * e.g. a stake's ending period (in which the stake was available for check-in and points) is followed by a one-period wait time before
-     * the stake can be withdrawn. This guarantees that stakers commit their Spank for at least one period and prevents staking and immediate
+     * @notice Withdraws the staked Spank from the specified stakes. Stakes can only be withdrawn after a wait period after their expiration,
+     * e.g. a stake's ending period (in which the stake was last available for check-in and booty claims) is followed by a one-period wait time before
+     * the stake can be withdrawn. This guarantees that stakers commit their Spank for at least one full period and prevents staking and immediate
      * withdrawal in the following period.
      * Reverts if
      * - stake is empty, e.g. because it's been withdrawn or it does not exist
@@ -481,12 +493,12 @@ contract SpankBank {
     }
 
     /**
-     * @dev Splits the given stake by transfering the specified spankAmount into a new stake for the designated
+     * @notice Splits the given stake by transfering the specified spankAmount into a new stake for the designated
      * staker. If the receiving staker is perviously unknown, a new staker will automatically be registered using
-     * the delegateKey and bootyBase parameters; for an existing staker, these are optional.
+     * the delegateKey and bootyBase parameters; for an existing staker, these parameters are optional.
      * The created stake will inherit the starting and ending period attributes of the source stake.
-     * Note: Unlike the #stake() function, there is no automatic application of points for the newly created stake. The new staker still has
-     * to perform a check-in on the current period after the split!
+     * Note: Unlike the #stake() function, there is no automatic check-in, i.e. application of points for the newly created stake.
+     * The new staker still has to perform a check-in on the current period after the split!
      * Reverts if
      * - newAddress is zero address
      * - spankAmount is zero
@@ -548,11 +560,47 @@ contract SpankBank {
     }
 
     /**
-     * @dev Records a vote for the msg.sender staker in favor of closing the SpankBank. In order to be eligible to add their vote,
+     * @notice Adds the specified amount to the given stake.
+     * This function allows a staker to increase one of the owned stakes ahead of a checkIn to increase the spankPoints the stake will generate.
+     * Reverts if
+     * - the specified increase is 0
+     * - the transfer of Spank tokens into the SpankBank fails
+     * - the specified stake is expired
+     * - the specified stake was already applied to the current period (via checkIn or stake)
+     *
+     * @param stakeId - the stake to increase
+     * @param increaseAmount - the amount of SPANK to add to the stake
+     */
+    function increaseStake(bytes32 stakeId, uint256 increaseAmount) public {
+        updatePeriod();
+
+        require(increaseAmount > 0, "increaseAmount is zero");
+        Stake storage stk = stakes[stakeId];
+        require(stk.owner == msg.sender, "stake has different owner");
+        require(currentPeriod <= stk.endingPeriod, "stake is expired");
+        require(stk.lastAppliedToPeriod < currentPeriod, "stake already applied to current period");
+
+        // transfer SPANK to this contract - assumes sender has already "allowed" the amount
+        require(spankToken.transferFrom(msg.sender, this, increaseAmount));
+
+        stk.spankStaked = SafeMath.add(stk.spankStaked, increaseAmount);
+        stakers[msg.sender].totalSpank = SafeMath.add(stakers[msg.sender].totalSpank, increaseAmount);
+        totalSpankStaked = SafeMath.add(totalSpankStaked, increaseAmount);
+
+        emit IncreaseStakeEvent(
+            stakeId,
+            msg.sender,
+            increaseAmount,
+            stk.spankStaked
+        );
+    }
+
+    /**
+     * @notice Records a vote for the msg.sender in favor of closing the SpankBank. In order to be eligible to add their vote,
      * stakers must have at least one active stake, i.e. a stake that is not expired with a non-zero amount of 
 
-     // TODO there is a small potential (resolvable) deadlock hidden in this function: If the majority of stakes are expired, but not withdrawn, this could prevent all active stakers from reaching a majority vote. (expired, but not withdrawn stakes still count towards the totalSpankStaked of the bank)
-     Solution: Run the closing logic during withdrawStake() to see if it shifted the ratio and reached the closing threshold or (simpler), someone with enough SPANK would open a new stake to help get over the threshold.
+     // TODO there is a potential (resolvable) deadlock hidden in this function: If the majority of staked SPANK is in expired stakes that were not withdrawn yet, this could prevent all active stakers from reaching a majority vote. (expired, but not withdrawn stakes still count towards the totalSpankStaked of the bank)
+     Options: During withdrawStake(), check if bank is closed and rerun the closingTrigger check after subtracting stake. This way withdrowing can resolve the deadlock ... so could someone with enough SPANK to open a new stake to help get the vote over the threshold.
 
      * Reverts if:
      * - the staker has no Spank staked
@@ -568,7 +616,7 @@ contract SpankBank {
         require(staker.totalSpank > 0, "staker has no Spank"); // this is just a shortcut to avoid the below loop for older stakers that had many stakes, but withdrew all
         // voting requires the staker to have at least one active stake
         bool activeStakes = false;
-        // this is the only 'growing' loop in the bank, but should be ok since it aborts looping as soon as one active stake is found
+        // this is the only loop over a growing array in the bank, but it should be ok since it aborts looping as soon as one active stake is found
         for (uint256 i = 0; i < staker.stakes.length; i++) {
             if(currentPeriod <= stakes[staker.stakes[i]].endingPeriod && stakes[staker.stakes[i]].spankStaked > 0) {
                 activeStakes = true;
@@ -594,7 +642,7 @@ contract SpankBank {
     }
 
     /**
-     * @dev Updates the delegateKey associated with the msg.sender staker to the specified one.
+     * @notice Updates the delegateKey associated with the msg.sender staker to the specified one.
      * Reverts if:
      * - newDelegateKey is zero address
      * - newDelegateKey is already in use
@@ -617,7 +665,7 @@ contract SpankBank {
     }
 
     /**
-     * @dev Updates the bootyBase associated with the msg.sender staker to the specified one.
+     * @notice Updates the bootyBase associated with the msg.sender staker to the specified one.
      * Reverts if:
      * - staker (msg.sender) does not exist
      *
