@@ -260,10 +260,10 @@ contract('SpankBank', (accounts) => {
   }
 
   // assumes single staker receiving all minted booty
-  const verifyClaimBooty = async (staker, fees, periods) => {
+  const verifyClaimBooty = async (staker, fees, claimedPeriods, tx) => {
 
-    for (let i = 0; i < periods.length; i++) {
-      const didClaimBooty = await spankbank.getDidClaimBooty.call(staker.address, periods[i])
+    for (let i = 0; i < claimedPeriods.length; i++) {
+      const didClaimBooty = await spankbank.getDidClaimBooty.call(staker.address, claimedPeriods[i])
       assert.ok(didClaimBooty)
     }
 
@@ -272,6 +272,14 @@ contract('SpankBank', (accounts) => {
 
     const bankBootyBalance = await bootyToken.balanceOf.call(spankbank.address)
     assert.equal(+bankBootyBalance, 0)
+
+    if (tx) {
+      const claimBootyEventPayload = getEventParams(tx, "ClaimBootyEvent")
+      const stakerBootyBalance = await bootyToken.balanceOf.call(staker.bootyBase)
+      assert.equal(claimBootyEventPayload.staker, staker.address)
+      assert.equal(+claimBootyEventPayload.claimedPeriods, claimedPeriods.length)
+      assert.equal(+claimBootyEventPayload.bootyOwed, +stakerBootyBalance)
+    }
   }
 
   const verifyUpdateDelegateKey = async (staker, newDelegateKey) => {
@@ -290,62 +298,74 @@ contract('SpankBank', (accounts) => {
     assert.equal(bankedStaker.bootyBase, newBootyBase)
   }
 
-  const verifySplitStake = async (splitStakeId, staker1, staker2, splitAmount, totalSpankStaked) => {
-      // by default, assumes staker1.stake is totalSpankStaked
-      totalSpankStaked = totalSpankStaked ? totalSpankStaked : staker1.stake
+  const verifySplitStake = async (splitStakeId, staker1, staker2, splitAmount, totalSpankStaked, tx) => {
+    // by default, assumes staker1.stake is totalSpankStaked
+    totalSpankStaked = totalSpankStaked ? totalSpankStaked : staker1.stake
 
-      const bankedStaker2 = await spankbank.stakers(staker2.address)
-      const staker2Stakes = await spankbank.getStakeIds(staker2.address)
-      const newStakeId = staker2Stakes[staker2Stakes.length-1] // assumes staker2 has at least one stake as the result of the split
-      const splitStake = await spankbank.stakes(splitStakeId)
-      const newStake = await spankbank.stakes(newStakeId)
+    const bankedStaker2 = await spankbank.stakers(staker2.address)
+    const staker2Stakes = await spankbank.getStakeIds(staker2.address)
+    const newStakeId = staker2Stakes[staker2Stakes.length-1] // assumes staker2 has at least one stake as the result of the split
+    const splitStake = await spankbank.stakes(splitStakeId)
+    const newStake = await spankbank.stakes(newStakeId)
 
-      // spankStaked should be added/subtracted properly
-      assert.equal(+splitStake.spankStaked, staker1.stake - splitAmount)
-      assert.equal(+newStake.spankStaked, splitAmount)
+    // spankStaked should be added/subtracted properly
+    assert.equal(+splitStake.spankStaked, staker1.stake - splitAmount)
+    assert.equal(+newStake.spankStaked, splitAmount)
 
-      // starting period should be same as staker1
-      assert.equal(+splitStake.startingPeriod, +newStake.startingPeriod)
+    // starting period should be same as staker1
+    assert.equal(+splitStake.startingPeriod, +newStake.startingPeriod)
 
-      // ending period should be same as staker1
-      assert.equal(+splitStake.endingPeriod, +newStake.endingPeriod)
+    // ending period should be same as staker1
+    assert.equal(+splitStake.endingPeriod, +newStake.endingPeriod)
 
-      // delegateKey and bootyBase are properly set
-      assert.equal(bankedStaker2.delegateKey, staker2.delegateKey)
-      assert.equal(bankedStaker2.bootyBase, staker2.bootyBase)
+    // delegateKey and bootyBase are properly set
+    assert.equal(bankedStaker2.delegateKey, staker2.delegateKey)
+    assert.equal(bankedStaker2.bootyBase, staker2.bootyBase)
 
-      // spankBank SPANK remains the same
-      const spankbankSpankBalance = await spankToken.balanceOf(spankbank.address)
-      assert.equal(+spankbankSpankBalance, totalSpankStaked)
+    // spankBank SPANK remains the same
+    const spankbankSpankBalance = await spankToken.balanceOf(spankbank.address)
+    assert.equal(+spankbankSpankBalance, totalSpankStaked)
 
-      // stakerByDelegateKey -> set
-      const stakerAddress2 = await spankbank.getStakerFromDelegateKey(staker2.delegateKey)
-      assert.equal(stakerAddress2, staker2.address)
+    // stakerByDelegateKey -> set
+    const stakerAddress2 = await spankbank.getStakerFromDelegateKey(staker2.delegateKey)
+    assert.equal(stakerAddress2, staker2.address)
+
+    // split stake event
+    if (tx) {
+      const splitStakeEventPayload = getEventParams(tx, "SplitStakeEvent")
+      assert.equal(splitStakeEventPayload.fromStakeId, splitStakeId)
+      assert.equal(splitStakeEventPayload.toStakeId, newStakeId)
+      assert.equal(splitStakeEventPayload.fromStaker, staker1.address)
+      assert.equal(splitStakeEventPayload.toStaker, staker2.address)
+      assert.equal(splitStakeEventPayload.newDelegateKey, staker2.delegateKey)
+      assert.equal(splitStakeEventPayload.newBootyBase, staker2.bootyBase)
+      assert.equal(+splitStakeEventPayload.spankAmount, splitAmount)
+    }
   }
 
-    const verifyIncreaseStake = async (stakeId, stakerAddress, stakeBefore, totalSpankBefore, increaseAmount, tx) => {
+  const verifyIncreaseStake = async (stakeId, stakerAddress, stakeBefore, totalSpankBefore, increaseAmount, tx) => {
 
-      const increasedStake = await spankbank.stakes(stakeId)
-      // spankStaked should be added/subtracted properly
-      assert.equal(+increasedStake.spankStaked, stakeBefore + increaseAmount)
+    const increasedStake = await spankbank.stakes(stakeId)
+    // spankStaked should be added/subtracted properly
+    assert.equal(+increasedStake.spankStaked, stakeBefore + increaseAmount)
 
-      // staker's totalSpank should have increased
-      const staker = await spankbank.stakers(stakerAddress)
-      assert.equal(+staker.totalSpank, staker1.stake + increaseAmount)
+    // staker's totalSpank should have increased
+    const staker = await spankbank.stakers(stakerAddress)
+    assert.equal(+staker.totalSpank, staker1.stake + increaseAmount)
 
-      // spankBank SPANK has increased
-      const bankedSpankBalance = await spankToken.balanceOf(spankbank.address)
-      assert.equal(+bankedSpankBalance, totalSpankBefore + increaseAmount)
+    // spankBank SPANK has increased
+    const bankedSpankBalance = await spankToken.balanceOf(spankbank.address)
+    assert.equal(+bankedSpankBalance, totalSpankBefore + increaseAmount)
 
-      // split stake event
-      if (tx) {
-        const increasedStakeEventPayload = getEventParams(tx, "IncreaseStakeEvent")
-        assert.equal(increasedStakeEventPayload.stakeId, stakeId)
-        assert.equal(+increasedStakeEventPayload.staker, stakerAddress)
-        assert.equal(+increasedStakeEventPayload.increaseAmount, increaseAmount)
-        assert.equal(+increasedStakeEventPayload.newSpankStaked, increasedStake.spankStaked)
-      }
+    // split stake event
+    if (tx) {
+      const increasedStakeEventPayload = getEventParams(tx, "IncreaseStakeEvent")
+      assert.equal(increasedStakeEventPayload.stakeId, stakeId)
+      assert.equal(+increasedStakeEventPayload.staker, stakerAddress)
+      assert.equal(+increasedStakeEventPayload.increaseAmount, increaseAmount)
+      assert.equal(+increasedStakeEventPayload.newSpankStaked, increasedStake.spankStaked)
     }
+  }
 
   const calcSpankPoints = (periods, stake) => {
     return (((periods * 5) + 40) * stake) / 100
@@ -1010,28 +1030,6 @@ contract('SpankBank', (accounts) => {
   '2. staker must not have claimed for claiming period\n\t' +
   '3. minting of booty must have been completed for the claiming period\n\t' +
   '4.transfer complete (not verified in tests)\n', () => {
-    // assumes single staker receiving all minted booty
-    const verifyClaimBooty = async (staker, fees, periods) => {
-
-      for (let i = 0; i < periods.length; i++) {
-        const didClaimBooty = await spankbank.getDidClaimBooty.call(staker.address, periods[i])
-        assert.ok(didClaimBooty)
-      }
-
-      const stakerBootyBalance = await bootyToken.balanceOf.call(staker.bootyBase)
-      assert.equal(+stakerBootyBalance, fees * 20)
-
-      const bankBootyBalance = await bootyToken.balanceOf.call(spankbank.address)
-      assert.equal(+bankBootyBalance, 0)
-    }
-
-    const verifyClaimBootyEvent = async (tx, staker, claimedPeriods) => {
-      const claimBootyEventPayload = getEventParams(tx, "ClaimBootyEvent")
-      const stakerBootyBalance = await bootyToken.balanceOf.call(staker.bootyBase)
-      assert.equal(claimBootyEventPayload.staker, staker.address)
-      assert.equal(+claimBootyEventPayload.claimedPeriods, claimedPeriods)
-      assert.equal(+claimBootyEventPayload.bootyOwed, +stakerBootyBalance)
-    }
 
     // sets up each test case to start with staker1 having staked, the initial booty supply sent as fees to the same period,
     // and then moving forward to the next period such that test function are in the position to call mintBooty
@@ -1055,8 +1053,7 @@ contract('SpankBank', (accounts) => {
       previousPeriod = +(await spankbank.currentPeriod()) - 1
 
       const tx = await spankbank.claimBooty([previousPeriod], { from: staker1.address })
-      await verifyClaimBootyEvent(tx, staker1, 1)
-      await verifyClaimBooty(staker1, fees, [previousPeriod])
+      await verifyClaimBooty(staker1, fees, [previousPeriod], tx)
     })
 
     it('0.2 happy case - staker claims booty for 2 periods ago', async () => {
@@ -1069,8 +1066,7 @@ contract('SpankBank', (accounts) => {
       twoPeriodsAgo = +(await spankbank.currentPeriod()) - 2
 
       const tx = await spankbank.claimBooty([twoPeriodsAgo], { from: staker1.address })
-      await verifyClaimBootyEvent(tx, staker1, 1)
-      await verifyClaimBooty(staker1, fees, [twoPeriodsAgo])
+      await verifyClaimBooty(staker1, fees, [twoPeriodsAgo], tx)
     })
 
     it('0.3 happy case - staker claims booty from previous period after checking in on current period', async () => {
@@ -1081,7 +1077,7 @@ contract('SpankBank', (accounts) => {
       previousPeriod = +(await spankbank.currentPeriod()) - 1
 
       const tx = await spankbank.claimBooty([previousPeriod], { from: staker1.address })
-      await verifyClaimBootyEvent(tx, staker1, 1)
+      await verifyClaimBooty(staker1, fees, [previousPeriod], tx)
 
       // staker1 sends fees (all the booty just received)
       // assumes bootyBase is the same as address
@@ -1114,8 +1110,7 @@ contract('SpankBank', (accounts) => {
       previousPeriod = +(await spankbank.currentPeriod()) - 1
 
       const tx = await spankbank.claimBooty([previousPeriod], { from: staker1.address })
-      await verifyClaimBootyEvent(tx, staker1, 1)
-      await verifyClaimBooty(staker1, fees, [previousPeriod])
+      await verifyClaimBooty(staker1, fees, [previousPeriod], tx)
     })
 
     it('0.5 happy case - staker claims booty after stake expires', async () => {
@@ -1133,8 +1128,7 @@ contract('SpankBank', (accounts) => {
       assert.isAbove(currentPeriod, +bankedStake1.endingPeriod)
 
       const tx = await spankbank.claimBooty([claimPeriod], { from: staker1.address })
-      await verifyClaimBootyEvent(tx, staker1, 1)
-      await verifyClaimBooty(staker1, fees, [claimPeriod])
+      await verifyClaimBooty(staker1, fees, [claimPeriod], tx)
     })
 
     it('0.6 happy case - staker claims booty after withdrawing', async () => {
@@ -1150,8 +1144,7 @@ contract('SpankBank', (accounts) => {
       assert.equal(+bankedStake1.spankStaked, 0)
 
       const tx = await spankbank.claimBooty([claimPeriod], { from: staker1.address })
-      await verifyClaimBootyEvent(tx, staker1, 1)
-      await verifyClaimBooty(staker1, fees, [claimPeriod])
+      await verifyClaimBooty(staker1, fees, [claimPeriod], tx)
     })
 
     it('0.7 happy case - staker claims booty after spankbank is closed', async () => {
@@ -1165,8 +1158,7 @@ contract('SpankBank', (accounts) => {
       assert.ok(isClosed)
 
       const tx = await spankbank.claimBooty([claimPeriod], { from: staker1.address })
-      await verifyClaimBootyEvent(tx, staker1, 1)
-      await verifyClaimBooty(staker1, fees, [claimPeriod])
+      await verifyClaimBooty(staker1, fees, [claimPeriod], tx)
     })
 
     it('1.1 staker failed to check in, claimBooty should fail', async () => {
@@ -1229,49 +1221,6 @@ contract('SpankBank', (accounts) => {
   '7. the amount to be split is less than or equal to staker\'s stake\n\t' +
   '8. the stake was not yet applied to the current period (via checkIn or stake)', () => {
 
-    const verifySplitStake = async (tx, splitStakeId, staker1, staker2, splitAmount, totalSpankStaked) => {
-      // by default, assumes staker1.stake is totalSpankStaked
-      totalSpankStaked = totalSpankStaked ? totalSpankStaked : staker1.stake
-
-      const bankedStaker2 = await spankbank.stakers(staker2.address)
-      const staker2Stakes = await spankbank.getStakeIds(staker2.address)
-      const newStakeId = staker2Stakes[staker2Stakes.length-1] // assumes staker2 has at least one stake as the result of the split
-      const splitStake = await spankbank.stakes(splitStakeId)
-      const newStake = await spankbank.stakes(newStakeId)
-
-      // spankStaked should be added/subtracted properly
-      assert.equal(+splitStake.spankStaked, staker1.stake - splitAmount)
-      assert.equal(+newStake.spankStaked, splitAmount)
-
-      // starting period should be same as staker1
-      assert.equal(+splitStake.startingPeriod, +newStake.startingPeriod)
-
-      // ending period should be same as staker1
-      assert.equal(+splitStake.endingPeriod, +newStake.endingPeriod)
-
-      // delegateKey and bootyBase are properly set
-      assert.equal(bankedStaker2.delegateKey, staker2.delegateKey)
-      assert.equal(bankedStaker2.bootyBase, staker2.bootyBase)
-
-      // spankBank SPANK remains the same
-      const spankbankSpankBalance = await spankToken.balanceOf(spankbank.address)
-      assert.equal(+spankbankSpankBalance, totalSpankStaked)
-
-      // stakerByDelegateKey -> set
-      const stakerAddress2 = await spankbank.getStakerFromDelegateKey(staker2.delegateKey)
-      assert.equal(stakerAddress2, staker2.address)
-
-      // split stake event
-      const splitStakeEventPayload = getEventParams(tx, "SplitStakeEvent")
-      assert.equal(splitStakeEventPayload.fromStakeId, splitStakeId)
-      assert.equal(splitStakeEventPayload.toStakeId, newStakeId)
-      assert.equal(splitStakeEventPayload.fromStaker, staker1.address)
-      assert.equal(splitStakeEventPayload.toStaker, staker2.address)
-      assert.equal(splitStakeEventPayload.newDelegateKey, staker2.delegateKey)
-      assert.equal(splitStakeEventPayload.newBootyBase, staker2.bootyBase)
-      assert.equal(+splitStakeEventPayload.spankAmount, splitAmount)
-    }
-
     beforeEach(async () => {
       // we split the entire stake by default
       splitAmount = staker1.stake
@@ -1285,14 +1234,14 @@ contract('SpankBank', (accounts) => {
     it('0.1 splitStake successful', async () => {
       await moveForwardPeriods(1)
       const tx = await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
-      await verifySplitStake(tx, splitStakeId, staker1, staker2, splitAmount)
+      await verifySplitStake(splitStakeId, staker1, staker2, splitAmount, staker1.stake, tx)
     })
 
     it('0.2 splitStake successful - splitAmount is less than total', async () => {
       splitAmount = staker1.stake / 2
       await moveForwardPeriods(1)
       const tx = await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
-      await verifySplitStake(tx, splitStakeId, staker1, staker2, splitAmount)
+      await verifySplitStake(splitStakeId, staker1, staker2, splitAmount, staker1.stake, tx)
     })
 
     it('0.3 splitStake successful - different delegateKey/bootyBase', async () => {
@@ -1300,13 +1249,13 @@ contract('SpankBank', (accounts) => {
       staker2.bootyBase = accounts[3]
       await moveForwardPeriods(1)
       const tx = await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
-      await verifySplitStake(tx, splitStakeId, staker1, staker2, splitAmount)
+      await verifySplitStake(splitStakeId, staker1, staker2, splitAmount, staker1.stake, tx)
     })
 
     it('0.4. splitStake success - can split during penultimate period', async () => {
       await moveForwardPeriods(staker1.periods - 1)
       const tx = await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
-      await verifySplitStake(tx, splitStakeId, staker1, staker2, splitAmount)
+      await verifySplitStake(splitStakeId, staker1, staker2, splitAmount, staker1.stake, tx)
     })
 
     it('0.5 splitStake successful - two splitstakes from same address', async () => {
@@ -1314,14 +1263,14 @@ contract('SpankBank', (accounts) => {
       splitAmount = staker1.stake / 2
       await moveForwardPeriods(1)
       const tx1 = await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
-      await verifySplitStake(tx1, splitStakeId, staker1, staker2, splitAmount)
+      await verifySplitStake(splitStakeId, staker1, staker2, splitAmount, staker1.stake, tx1)
 
       // verifySplitStake expects staker1.stake to reflect onchain staked spank
       const stake1 = await spankbank.stakes(splitStakeId)
       staker1.stake = +stake1.spankStaked
 
       const tx2 = await spankbank.splitStake(splitStakeId, staker3.address, staker3.delegateKey, staker3.bootyBase, splitAmount, {from: staker1.address})
-      await verifySplitStake(tx2, splitStakeId, staker1, staker3, splitAmount, totalStakedSpank)
+      await verifySplitStake(splitStakeId, staker1, staker3, splitAmount, totalStakedSpank, tx2)
     })
 
     it('0.6 splitStake successful - chained splitStake', async () => {
@@ -1329,7 +1278,7 @@ contract('SpankBank', (accounts) => {
       splitAmount = staker1.stake / 2
       await moveForwardPeriods(1)
       const tx1 = await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
-      await verifySplitStake(tx1, splitStakeId, staker1, staker2, splitAmount)
+      await verifySplitStake(splitStakeId, staker1, staker2, splitAmount, staker1.stake, tx1)
 
       // verifySplitStake expects staker2.stake (in that function context) to reflect onchain staked spank
       const staker2Stakes = await spankbank.getStakeIds(staker2.address)
@@ -1339,14 +1288,14 @@ contract('SpankBank', (accounts) => {
 
       // split 100% of the spank split to staker2 in turn to staker3
       const tx2 = await spankbank.splitStake(splitStakeId, staker3.address, staker3.delegateKey, staker3.bootyBase, splitAmount, {from: staker2.address})
-      await verifySplitStake(tx2, splitStakeId, staker2, staker3, splitAmount, totalStakedSpank)
+      await verifySplitStake(splitStakeId, staker2, staker3, splitAmount, totalStakedSpank, tx2)
     })
 
     it('0.7.2 edge case - checkIn after <100% splitStake works and points>0', async () => {
       splitAmount = staker1.stake / 2
       await moveForwardPeriods(1)
       const tx = await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
-      await verifySplitStake(tx, splitStakeId, staker1, staker2, splitAmount)
+      await verifySplitStake(splitStakeId, staker1, staker2, splitAmount, staker1.stake, tx)
       await spankbank.checkIn([splitStakeId], [0], {from: staker1.delegateKey})
       currentPeriod = +(await spankbank.currentPeriod())
       const spankPoints = await spankbank.getSpankPoints.call(staker1.address, currentPeriod)
@@ -1362,13 +1311,13 @@ contract('SpankBank', (accounts) => {
       assert.ok(isClosed)
 
       const tx = await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
-      await verifySplitStake(tx, splitStakeId, staker1, staker2, splitAmount)
+      await verifySplitStake(splitStakeId, staker1, staker2, splitAmount, staker1.stake, tx)
     })
 
     it('0.9. splitStake success - staker at penultimate period', async () => {
       await moveForwardPeriods(staker1.periods - 1)
       const tx = await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
-      await verifySplitStake(tx, splitStakeId, staker1, staker2, splitAmount)
+      await verifySplitStake(splitStakeId, staker1, staker2, splitAmount, staker1.stake, tx)
     })
 
     it('1. splitStake fails - new address is 0x0', async () => {
@@ -1416,7 +1365,7 @@ contract('SpankBank', (accounts) => {
     it('7.2 splitStake fails - after 100% splitStake', async () => {
       await moveForwardPeriods(1)
       const tx = await spankbank.splitStake(splitStakeId, staker2.address, staker2.delegateKey, staker2.bootyBase, splitAmount, {from: staker1.address})
-      await verifySplitStake(tx, splitStakeId, staker1, staker2, splitAmount)
+      await verifySplitStake(splitStakeId, staker1, staker2, splitAmount, staker1.stake, tx)
 
       await spankbank.splitStake(splitStakeId, staker3.address, staker3.delegateKey, staker3.bootyBase, splitAmount, {from: staker1.address}).should.be.rejectedWith('stake is zero')
     })
@@ -1446,33 +1395,11 @@ contract('SpankBank', (accounts) => {
     })
   })
 
-  describe('increaseStake has 3 requirements\n\t' +
+  describe('increaseStake has 4 requirements\n\t' +
   '1. the increase is greater than zero\n\t' +
   '2. the msg.sender is the owner of the stake' +
   '3. the stake is not expired\n\t' +
   '4. the stake was not yet applied to the current period (via checkIn or stake)', () => {
-
-    const verifyIncreaseStake = async (tx, stakeId, stakerAddress, stakeBefore, totalSpankBefore, increaseAmount) => {
-
-      const increasedStake = await spankbank.stakes(stakeId)
-      // spankStaked should be added/subtracted properly
-      assert.equal(+increasedStake.spankStaked, stakeBefore + increaseAmount)
-
-      // staker's totalSpank should have increased
-      const staker = await spankbank.stakers(stakerAddress)
-      assert.equal(+staker.totalSpank, staker1.stake + increaseAmount)
-
-      // spankBank SPANK has increased
-      const bankedSpankBalance = await spankToken.balanceOf(spankbank.address)
-      assert.equal(+bankedSpankBalance, totalSpankBefore + increaseAmount)
-
-      // split stake event
-      const increasedStakeEventPayload = getEventParams(tx, "IncreaseStakeEvent")
-      assert.equal(increasedStakeEventPayload.stakeId, stakeId)
-      assert.equal(+increasedStakeEventPayload.staker, stakerAddress)
-      assert.equal(+increasedStakeEventPayload.increaseAmount, increaseAmount)
-      assert.equal(+increasedStakeEventPayload.newSpankStaked, increasedStake.spankStaked)
-    }
 
     beforeEach(async () => {
       await spankToken.transfer(staker1.address, staker1.stake, {from: owner})
@@ -1489,7 +1416,7 @@ contract('SpankBank', (accounts) => {
       await spankToken.approve(spankbank.address, increaseAmount, {from: staker1.address})
       const totalSpankBefore = await spankToken.balanceOf(spankbank.address)
       const tx = await spankbank.increaseStake(stakeId, increaseAmount, {from: staker1.address})
-      await verifyIncreaseStake(tx, stakeId, staker1.address, staker1.stake, +totalSpankBefore, increaseAmount)
+      await verifyIncreaseStake(stakeId, staker1.address, staker1.stake, +totalSpankBefore, increaseAmount, tx)
     })
 
     it('0.2 increaseStake successful - increase large amount', async () => {
@@ -1500,7 +1427,7 @@ contract('SpankBank', (accounts) => {
       await spankToken.approve(spankbank.address, increaseAmount, {from: staker1.address})
       const totalSpankBefore = await spankToken.balanceOf(spankbank.address)
       const tx = await spankbank.increaseStake(stakeId, increaseAmount, {from: staker1.address})
-      await verifyIncreaseStake(tx, stakeId, staker1.address, staker1.stake, +totalSpankBefore, increaseAmount)
+      await verifyIncreaseStake(stakeId, staker1.address, staker1.stake, +totalSpankBefore, increaseAmount, tx)
     })
 
     it('1. increaseStake fails - no increase amount', async () => {
