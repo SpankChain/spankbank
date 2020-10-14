@@ -11,8 +11,8 @@ module.exports = (deployer, network, accounts) => {
 
   deployer.deploy(SpankToken, data.token.totalSupply, data.token.name, data.token.decimals, data.token.symbol)
     .then(() => {
-      return deployer.deploy(SpankBank, data.spankbank.periodLength, data.spankbank.maxPeriods, SpankToken.address, data.spankbank.initialBootySupply, data.booty.name, data.booty.decimals, data.booty.symbol)
+      return deployer.deploy(SpankBank, data.spankbank.maxPeriods, SpankToken.address, data.spankbank.initialBootySupply, data.booty.name, data.booty.decimals, data.booty.symbol)
     })
 
-  // 2592069, 12, "0x42d6622dece394b54999fbd73d108123806f6a18", 10069000000000000000000, "BOOTY", 18, "BOOTY"
+  // 12, "0x42d6622dece394b54999fbd73d108123806f6a18", 10069000000000000000000, "BOOTY", 18, "BOOTY"
 }

@@ -13,7 +13,6 @@ contract SpankBank {
         EVENTS
     ************************************/
     event SpankBankCreated(
-        uint256 periodLength,
         uint256 maxPeriods,
         address spankAddress,
         uint256 initialBootySupply,
@@ -48,7 +47,7 @@ contract SpankBank {
         address staker,
         uint256 period,
         uint256 spankPoints,
-        uint256 stakeEndingPeriod
+        uint256 stakeExpirationTime
     );
 
     event ClaimBootyEvent (
@@ -115,8 +114,7 @@ contract SpankBank {
     struct Stake {
         address owner; // the staker address
         uint256 spankStaked; // the amount of spank staked
-        uint256 startingPeriod; // the period this staker started staking
-        uint256 endingPeriod; // the period after which this stake expires
+        uint256 expirationTime; // the time after which this stake expires and can be claimed
         uint256 lastAppliedToPeriod; // the period to which this stake has last been applied as points to receive booty
     }
 
@@ -134,7 +132,7 @@ contract SpankBank {
     VARIABLES SET AT CONTRACT DEPLOYMENT
     ************************************/
     // GLOBAL CONSTANT VARIABLES
-    uint256 public periodLength; // time length of each period in seconds
+    uint256 public periodLength = 30 * 86400; // 30 days in seconds; time length of each period
     uint256 public maxPeriods; // the maximum # of periods a staker can stake for
     uint256 public totalSpankStaked; // the total SPANK staked across all stakers
     bool public isClosed; // true if voteToClose has passed, allows early withdrawals
@@ -166,10 +164,17 @@ contract SpankBank {
         _;
     }
 
-    // TODO constructor needs the old booty address
-    // TODO initialBootySupply is probably obsolete since stakers earn spank immediately in the next period now, even when entering on period 0 and no airdrop is needed.
+    // TODO use initialBootySupply to re-seed what was in the old Booty contract on mainnet. Then use the multisend bootstrap function to distribute it to holders
+    /**
+     * @notice Constructor for the SpankBank
+     * @param _maxPeriods - 
+     * @param spankAddress - 
+     * @param initialBootySupply - 
+     * @param bootyTokenName - 
+     * @param bootyDecimalUnits - 
+     * @param bootySymbol - 
+     */
     constructor (
-        uint256 _periodLength,
         uint256 _maxPeriods,
         address spankAddress,
         uint256 initialBootySupply,
@@ -177,7 +182,6 @@ contract SpankBank {
         uint8 bootyDecimalUnits,
         string bootySymbol
     )   public {
-        periodLength = _periodLength;
         maxPeriods = _maxPeriods;
         spankToken = HumanStandardToken(spankAddress);
         bootyToken = new MintAndBurnToken(bootyTokenName, bootyDecimalUnits, bootySymbol);
@@ -207,7 +211,7 @@ contract SpankBank {
         pointsTable[11] = 95;
         pointsTable[12] = 100;
 
-        emit SpankBankCreated(_periodLength, _maxPeriods, spankAddress, initialBootySupply, bootyTokenName, bootyDecimalUnits, bootySymbol);
+        emit SpankBankCreated(_maxPeriods, spankAddress, initialBootySupply, bootyTokenName, bootyDecimalUnits, bootySymbol);
     }
 
     /**
@@ -260,7 +264,7 @@ contract SpankBank {
         // this will not cause any hash collisions as long as no stakes are deleted
         bytes32 stakeId = keccak256(abi.encodePacked(stakerAddress, stakers[stakerAddress].stakes.length));
         stakers[stakerAddress].stakes.push(stakeId);
-        stakes[stakeId] = Stake(stakerAddress, spankAmount, currentPeriod, currentPeriod + stakePeriods - 1, 0);
+        stakes[stakeId] = Stake(stakerAddress, spankAmount, now + (stakePeriods * periodLength), 0);
 
         uint256 stakePoints = _applyStakeToCurrentPeriod(stakeId);
 
@@ -290,7 +294,7 @@ contract SpankBank {
         Stake storage stk = stakes[stakeId];
         Staker storage staker = stakers[stk.owner];
 
-        uint256 stakePeriods = stk.endingPeriod - currentPeriod + 1; // + 1 is added to correctly calculate the total number of staking periods *including* the currentPeriod
+        uint256 stakePeriods = SafeMath.div(stk.expirationTime - periods[currentPeriod].startTime, periodLength); // how many eligible periods left including this one
         stakePoints = SafeMath.div(SafeMath.mul(stk.spankStaked, pointsTable[stakePeriods]), 100);
 
         // add staker spankpoints to total spankpoints for this period
@@ -359,7 +363,7 @@ contract SpankBank {
         period.mintingComplete = true;
 
         uint256 targetBootySupply = SafeMath.mul(period.bootyFees, 20);
-        uint256 totalBootySupply = bootyToken.totalSupply(); // TODO BOOTY v1 + v2
+        uint256 totalBootySupply = bootyToken.totalSupply();
 
         if (targetBootySupply > totalBootySupply) {
             uint256 bootyMinted = targetBootySupply - totalBootySupply;
@@ -387,20 +391,21 @@ contract SpankBank {
     /**
      * @notice In order to receive Booty, each staker must check-in once per period.
      * This check-in will compute the spankPoints locally and globally for each staker.
+     * For each check-in, the stake can optionally be extended by a number of additional periods on top of the periods still committed to in the stake.
      * Usage example:
      * - Staker has multiple stakes.
      * - Calling `checkIn(["0x123456","0x1a2b3c"], [38,0])` will perform a check-in on the stakes with the given bytes32 IDs and update the second stake's endingPeriod to 38.
      * Reverts if:
      * - a stake is empty, e.g. because it's been withdrawn or it does not exist
      * - the caller is not the owner of the stake or delegate of the staker
-     * - a stake is expired
+     * - a stake has expired or expires in the current period
      * - a stake has already been applied to the current period (e.g. via checkIn or stake)
      * - an update for a stake's ending period is less than its current ending period or is >= currentPeriod + maxPeriods
      *
      * @param stakeIds - an array of Stake IDs for which the staker would like to check in
-     * @param updatedEndingPeriods - an array of updated ending periods matching the indexes of the stakeIds. A 0-value indicates no update for that stake.
+     * @param additionalPeriods - an array of number of added periods matching the indexes of the stakeIds. A 0-value indicates no extension for that stake.
      */
-    function checkIn(bytes32[] stakeIds, uint256[] updatedEndingPeriods) SpankBankIsOpen public {
+    function checkIn(bytes32[] stakeIds, uint256[] additionalPeriods) SpankBankIsOpen public {
         updatePeriod();
 
         address stakerAddress =  stakerByDelegateKey[msg.sender];
@@ -410,16 +415,19 @@ contract SpankBank {
             Stake storage stk = stakes[stakeIds[i]];
             require(stk.spankStaked > 0, "stake is zero");
             require(stk.owner == stakerAddress, "stake has different owner");
-            require(currentPeriod <= stk.endingPeriod, "stake is expired");
+            // can only check-in, if the stake expiration is at least one period away, i.e. stake does not expire in the current period
+            require(stk.expirationTime > periods[currentPeriod].endTime, "stake has expired");
             require(stk.lastAppliedToPeriod < currentPeriod, "cannot check-in twice for the same stake and period");
-            // If updatedEndingPeriod is 0, don't update the ending period
-            if (updatedEndingPeriods[i] > 0) {
-                require(updatedEndingPeriods[i] > stk.endingPeriod, "updatedEndingPeriod less than or equal to stake endingPeriod");
-                require(updatedEndingPeriods[i] < currentPeriod + maxPeriods, "updatedEndingPeriod greater than currentPeriod and maxPeriods");
-                stk.endingPeriod = updatedEndingPeriods[i];
+            // If 0, don't extend the staked periods
+            if (additionalPeriods[i] > 0) {
+                // it is not necessary to check that the additionalPeriods value is <= maxPeriods, because if it is not, the newExpirationTime will be rejected
+                uint256 newExpirationTime = SafeMath.add(stk.expirationTime, (additionalPeriods[i] * periodLength));
+                // cannot extend stake beyond the maxPeriods allowed as seen from the end of the current period
+                require(newExpirationTime <= periods[currentPeriod].endTime + (maxPeriods * periodLength), "additionalPeriods greater than maxPeriods");
+                stk.expirationTime = newExpirationTime;
             }
             _applyStakeToCurrentPeriod(stakeIds[i]);
-            emit CheckInEvent(stakeIds[i], stakerAddress, currentPeriod, staker.spankPoints[currentPeriod], stk.endingPeriod);
+            emit CheckInEvent(stakeIds[i], stakerAddress, currentPeriod, staker.spankPoints[currentPeriod], stk.expirationTime);
         }
     }
 
@@ -466,7 +474,7 @@ contract SpankBank {
      * Reverts if
      * - stake is empty, e.g. because it's been withdrawn or it does not exist
      * - caller is not the original staker
-     * - the waiting period (1 period after stake expiration) has not yet passed
+     * - the stake's exact expiration time has not passed
      * 
      * @param stakeIds an array of Stake IDs for which the stake should be withdrawn
      */
@@ -478,7 +486,7 @@ contract SpankBank {
         uint256 spankToWithdraw = 0;
         for (uint256 i = 0; i < stakeIds.length; i++) {
             Stake storage stk = stakes[stakeIds[i]];
-            require(isClosed || currentPeriod > stk.endingPeriod + 1, "currentPeriod less than waiting period or spankbank not closed");
+            require(isClosed || now > stk.expirationTime, "spankbank not closed or stake not expired");
             require(stk.spankStaked > 0, "stake is zero");
             require(stk.owner == msg.sender, "stake has different owner");
             spankToWithdraw = SafeMath.add(spankToWithdraw, stk.spankStaked);
@@ -504,6 +512,7 @@ contract SpankBank {
      * - spankAmount is zero
      * - Spank in the stake is less than split amount
      * - stake was not applied to the current period, yet (checked-in)
+     * - stake has expired or expires in the current period
      * - newDelegateKey is zero address (only for unknown staker address)
      * - newBootyBase is zero address (only for unknown staker address)
      * - newDelegateKey is already used (only for unknown staker address)
@@ -521,9 +530,9 @@ contract SpankBank {
         require(spankAmount > 0, "spankAmount is zero");
 
         Stake storage sourceStake = stakes[stakeId];
-        require(sourceStake.spankStaked > 0, "stake is zero");
+        require(sourceStake.spankStaked >= spankAmount, "staked amount too low for split");
         require(sourceStake.owner == msg.sender, "stake has different owner");
-        require(currentPeriod <= sourceStake.endingPeriod, "stake is expired");
+        require(sourceStake.expirationTime > periods[currentPeriod].endTime, "stake has expired");
         require(spankAmount <= sourceStake.spankStaked, "spankAmount greater than stake");
         require(sourceStake.lastAppliedToPeriod < currentPeriod, "stake already applied to current period");
 
@@ -546,7 +555,7 @@ contract SpankBank {
         staker.totalSpank = SafeMath.sub(staker.totalSpank, spankAmount);
 
         stakers[newAddress].stakes.push(newStakeId);
-        stakes[newStakeId] = Stake(newAddress, spankAmount, sourceStake.startingPeriod, sourceStake.endingPeriod, 0);
+        stakes[newStakeId] = Stake(newAddress, spankAmount, sourceStake.expirationTime, 0);
 
         emit SplitStakeEvent(
             stakeId,
@@ -565,8 +574,8 @@ contract SpankBank {
      * Reverts if
      * - the specified increase is 0
      * - the transfer of Spank tokens into the SpankBank fails
-     * - the specified stake is expired
-     * - the specified stake was already applied to the current period (via checkIn or stake)
+     * - the stake has expired or expires in the current period
+     * - the stake was already applied to the current period (via checkIn or stake)
      *
      * @param stakeId - the stake to increase
      * @param increaseAmount - the amount of SPANK to add to the stake
@@ -577,7 +586,7 @@ contract SpankBank {
         require(increaseAmount > 0, "increaseAmount is zero");
         Stake storage stk = stakes[stakeId];
         require(stk.owner == msg.sender, "stake has different owner");
-        require(currentPeriod <= stk.endingPeriod, "stake is expired");
+        require(stk.expirationTime > periods[currentPeriod].endTime, "stake has expired");
         require(stk.lastAppliedToPeriod < currentPeriod, "stake already applied to current period");
 
         // transfer SPANK to this contract - assumes sender has already "allowed" the amount
@@ -616,9 +625,10 @@ contract SpankBank {
         require(staker.totalSpank > 0, "staker has no Spank"); // this is just a shortcut to avoid the below loop for older stakers that had many stakes, but withdrew all
         // voting requires the staker to have at least one active stake
         bool activeStakes = false;
+        uint256 periodEndTime = periods[currentPeriod].endTime;
         // this is the only loop over a growing array in the bank, but it should be ok since it aborts looping as soon as one active stake is found
         for (uint256 i = 0; i < staker.stakes.length; i++) {
-            if(currentPeriod <= stakes[staker.stakes[i]].endingPeriod && stakes[staker.stakes[i]].spankStaked > 0) {
+            if(periodEndTime < stakes[staker.stakes[i]].expirationTime && stakes[staker.stakes[i]].spankStaked > 0) {
                 activeStakes = true;
                 break;
             }
