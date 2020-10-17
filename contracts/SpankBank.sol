@@ -4,6 +4,10 @@ import {HumanStandardToken} from "./HumanStandardToken.sol";
 import {MintAndBurnToken} from "./MintAndBurnToken.sol";
 import "./BytesLib.sol";
 
+/**
+ * @notice The SpankBank is an algorithmic central bank that powers the two-token SpankChain economic system.
+ * 
+ */
 contract SpankBank {
 
     using BytesLib for bytes;
@@ -132,9 +136,9 @@ contract SpankBank {
     VARIABLES SET AT CONTRACT DEPLOYMENT
     ************************************/
     // GLOBAL CONSTANT VARIABLES
-    uint256 public periodLength = 30 * 86400; // 30 days in seconds; time length of each period
-    uint256 public maxPeriods; // the maximum # of periods a staker can stake for
-    uint256 public totalSpankStaked; // the total SPANK staked across all stakers
+    uint256 public periodLength = 30 * 86400; // 30 days in seconds; the length of each period
+    uint256 public maxPeriods; // the maximum # of periods a staker for which a stake can be pledged
+    uint256 public totalSpankStaked; // the total SPANK staked across all stakers and their stakes
     bool public isClosed; // true if voteToClose has passed, allows early withdrawals
 
     // ERC-20 BASED TOKEN WITH SOME ADDED PROPERTIES FOR HUMAN READABILITY
@@ -147,7 +151,7 @@ contract SpankBank {
     // 2 -> 50%
     // ...
     // 12 -> 100%
-    mapping(uint256 => uint256) public pointsTable;
+    uint256[13] public pointsTable = [0,45,50,55,60,65,70,75,80,85,90,95,100];
 
     /*************************************
     INTERAL ACCOUNTING
@@ -164,7 +168,7 @@ contract SpankBank {
         _;
     }
 
-    // TODO use initialBootySupply to re-seed what was in the old Booty contract on mainnet. Then use the multisend bootstrap function to distribute it to holders
+    // TODO use initialBootySupply to re-seed what was in the old Booty contract on mainnet.
     /**
      * @notice Constructor for the SpankBank
      * @param _maxPeriods - 
@@ -195,21 +199,6 @@ contract SpankBank {
         periods[currentPeriod].endTime = SafeMath.add(startTime, periodLength);
 
         bootyToken.transfer(msg.sender, initialBootySupply);
-
-        // initialize points table
-        pointsTable[0] = 0;
-        pointsTable[1] = 45;
-        pointsTable[2] = 50;
-        pointsTable[3] = 55;
-        pointsTable[4] = 60;
-        pointsTable[5] = 65;
-        pointsTable[6] = 70;
-        pointsTable[7] = 75;
-        pointsTable[8] = 80;
-        pointsTable[9] = 85;
-        pointsTable[10] = 90;
-        pointsTable[11] = 95;
-        pointsTable[12] = 100;
 
         emit SpankBankCreated(_maxPeriods, spankAddress, initialBootySupply, bootyTokenName, bootyDecimalUnits, bootySymbol);
     }
