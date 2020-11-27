@@ -1,8 +1,14 @@
-const HDWalletProvider = require("truffle-hdwallet-provider");
+const HDWalletProvider = require("@truffle/hdwallet-provider");
 
 const mnemonic = 'fetch local valve black attend double eye excite planet primary install allow'
 
 module.exports = {
+
+  compilers: {
+    solc: {
+      version: "0.4.24" // A version or constraint - Ex. "^0.5.0
+    }
+  },
   networks: {
     development: {
       host: "localhost",
